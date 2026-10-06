@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "mcp__minecraft",
+      "Monitor",
+      "Read(./memory/**)",
+      "Read(./prompts/**)",
+      "Edit(./memory/**)"
+    ],
+    "deny": [
+      "Bash",
+      "PowerShell",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Agent",
+      "Skill",
+      "Workflow",
+      "SendMessage",
+      "ListAgents",
+      "PushNotification",
+      "ReportFindings",
+      "Artifact",
+      "ArtifactComments",
+      "ArtifactData",
+      "DesignSync",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "EnterWorktree",
+      "ExitWorktree",
+      "RemoteTrigger",
+      "Edit(./prompts/**)",
+      "Edit(./scripts/**)",
+      "Edit(./config/**)",
+      "Edit(./.claude/**)",
+      "Edit(./.mcp.json)",
+      "Edit(./start-xiaoke.cmd)",
+      "Read(~/.ssh/**)",
+      "Read(~/.claude/**)"
+    ]
+  }
+}

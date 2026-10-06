@@ -1,0 +1,28 @@
+# Runtime logs and process state
+/logs/
+*.log
+*.pid
+
+# Local credentials and account state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.claude/settings.local.json
+.claude/*.local.json
+
+# Tooling and generated working files
+node_modules/
+.gradle/
+.cache/
+__pycache__/
+*.pyc
+Thumbs.db
+.DS_Store
+
+# Keep the explicitly archived prototype artifacts, not its build cache
+/skin/archive/cpm-prototype/build/
+/skin/archive/cpm-prototype/screenshots/

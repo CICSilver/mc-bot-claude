@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "minecraft": {
+      "command": "node",
+      "args": [
+        "E:/WorkFiles/workSpace/github_repos/minecraft-mcp-server/dist/main.js",
+        "--host",
+        "mc.lemalin.icu",
+        "--port",
+        "25565",
+        "--username",
+        "clawd"
+      ],
+      "env": {
+        "XIAOKE_LOGOUT_FLAG": "E:/WorkFiles/workSpace/github_repos/mc-bot-instruction/logs/logout.flag"
+      }
+    }
+  }
+}
