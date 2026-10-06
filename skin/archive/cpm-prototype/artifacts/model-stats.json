@@ -1,0 +1,18 @@
+{
+  "elements": 578,
+  "visibleCubes": 533,
+  "texture": {
+    "width": 1254,
+    "height": 1254,
+    "grid": 128
+  },
+  "animatedParts": [
+    "tail.sway",
+    "ahoge.sway",
+    "back.hair.soft.motion",
+    "ear.-1",
+    "ear.1"
+  ],
+  "targetPlayer": "clawd",
+  "targetUuid": "bc9e625b-fdc0-370b-be2e-082f5a6731f6"
+}

@@ -1,0 +1,126 @@
+{
+  "algorithm": "SHA-256",
+  "status": "pixel-design-pending; CPM prototype archived and not deployed",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 82,
+      "sha256": "6a1e859aa1d28e6e85c72d42f2e36feae194085fc715107281ad6a26dea90579"
+    },
+    {
+      "path": "DESIGN.md",
+      "bytes": 4407,
+      "sha256": "b616ba332ff50bc21f06d0b515f47961fd8fc05a783d90ee00c4152496491980"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2247,
+      "sha256": "38dd16167b1be7a7eee4dd75662f23f23424bd82702d810e059b1fe993d16b98"
+    },
+    {
+      "path": "archive/cpm-prototype/README.md",
+      "bytes": 3376,
+      "sha256": "20b60faa6c2d4220748ec97f4d3417ad550ae580a2320cf314f708665d58d404"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/editor-preview.png",
+      "bytes": 87289,
+      "sha256": "869c83cbc03b51ce4c9dfc5aa44d9a0ee01a5157fd592ae44ce89fee40467b04"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/model-stats.json",
+      "bytes": 318,
+      "sha256": "8189f2ffb4cb8c2ae2aa3211f0d75b6d3c2dcabd4980f1547aa0793bb3239ea7"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/xiaoke-avatar-0.1.0.jar",
+      "bytes": 2022411,
+      "sha256": "84cb194d6fb141d675507b742d9bc613b656c474b0b5ee832a19acee1bb9f402"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/xiaoke-maid.cpmmodel",
+      "bytes": 2024957,
+      "sha256": "2ee19b963bb32302fe9bc56952525e08f75e3161810901dc37165a31837e1cba"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/xiaoke-maid.cpmproject",
+      "bytes": 962277,
+      "sha256": "ae2841b5662a4a906607d2257f20680c12859fbc5d95727ecac9cf50a7a41be3"
+    },
+    {
+      "path": "archive/cpm-prototype/artifacts/xiaoke-native-package.b64",
+      "bytes": 2699740,
+      "sha256": "6773b0615834c5924d13610a72f982bb2cc42b6c93479d27abb0c2ee59fb68e7"
+    },
+    {
+      "path": "archive/cpm-prototype/assets/face-generation.txt",
+      "bytes": 1670,
+      "sha256": "6918922d288700ab9ad97650d8dade3945b817501aa3966bac85648b86246279"
+    },
+    {
+      "path": "archive/cpm-prototype/assets/xiaoke-face.png",
+      "bytes": 956334,
+      "sha256": "1a3e314fb6a47b7adfbb05e367929133047c5f8ffed6efc1b75d5166fcc83700"
+    },
+    {
+      "path": "archive/cpm-prototype/build-avatar.mjs",
+      "bytes": 14465,
+      "sha256": "884a48c23f3f1e70298f891c788dca6944075ac140623bdd3b125571fe124224"
+    },
+    {
+      "path": "archive/cpm-prototype/build-client.ps1",
+      "bytes": 2740,
+      "sha256": "2287146944306f84c8e7c460dbcba35ec8ecb4d04f2f2a59749f8f03e8f6dc72"
+    },
+    {
+      "path": "archive/cpm-prototype/editor-tool.mjs",
+      "bytes": 3499,
+      "sha256": "7d89b9f394a7e9011a248e362891c77fb613198c303ad7f0b75b872fd1c6efb0"
+    },
+    {
+      "path": "archive/cpm-prototype/package-lock.json",
+      "bytes": 1743,
+      "sha256": "086145a341cdad8d5912b50712dc3feb46b1e78f9a268fc07562e2ba67bbd952"
+    },
+    {
+      "path": "archive/cpm-prototype/package.json",
+      "bytes": 313,
+      "sha256": "6d3987506b42bc9370eb20384f1d26f8d647b357b18b4a6ee79cc384fdf85ebb"
+    },
+    {
+      "path": "archive/cpm-prototype/resources/fabric.mod.json",
+      "bytes": 446,
+      "sha256": "d8738e94f820219159e32bd8f576946aad50f40d8336c05df9d5ba5b8b6c4971"
+    },
+    {
+      "path": "archive/cpm-prototype/src/local/xiaoke/PackModel.java",
+      "bytes": 2616,
+      "sha256": "7f1dd9f3dcb31d2685e6ef44a680efecf80d2a8ed04f562fe60613f75e0755aa"
+    },
+    {
+      "path": "archive/cpm-prototype/src/local/xiaoke/TargetRule.java",
+      "bytes": 845,
+      "sha256": "ff67ef3cd8cc072f0dfa87f9d68c1dce2543e35f5d6e43a54c837e87bbf3ec35"
+    },
+    {
+      "path": "archive/cpm-prototype/src/local/xiaoke/XiaokeAvatarClient.java",
+      "bytes": 4348,
+      "sha256": "da86a2a5d0e56ca6400a8f81096b2d75eed3400b028ee1dbb4c09f5faff0b039"
+    },
+    {
+      "path": "archive/cpm-prototype/src/test/TargetRuleTest.java",
+      "bytes": 1310,
+      "sha256": "86a736234f59323eaed86284523b481c034dda1bda594d0b69f7d53201225ab5"
+    },
+    {
+      "path": "references/minecraft-pixel-style.png",
+      "bytes": 208535,
+      "sha256": "b793cf128dec3f6f0ff74b897bbf84b2ea6e56794ca68d16ba5ea07a98120e1f"
+    },
+    {
+      "path": "references/xiaoke-turnaround.png",
+      "bytes": 1095457,
+      "sha256": "afa5b5dd8b2a43e8ee898974eba4b27b3aff516e655c4cd3d8216d8b04ed60d1"
+    }
+  ]
+}
