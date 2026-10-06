@@ -12,7 +12,8 @@
         "clawd"
       ],
       "env": {
-        "XIAOKE_LOGOUT_FLAG": "E:/WorkFiles/workSpace/github_repos/mc-bot-instruction/logs/logout.flag"
+        "XIAOKE_LOGOUT_FLAG": "E:/WorkFiles/workSpace/github_repos/mc-bot-instruction/logs/logout.flag",
+        "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5"
       }
     }
   }

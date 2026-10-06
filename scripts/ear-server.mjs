@@ -131,7 +131,11 @@ function handleFrame(socket, buf) {
 	else if (op === 0x9 && data.length < 126) socket.write(Buffer.concat([Buffer.from([0x8a, data.length]), data]));
 }
 
-const http = createServer((req, res) => { res.writeHead(426); res.end("WebSocket only\n"); });
+const http = createServer((req, res) => {
+	// 新的启动器启动前会来请旧的耳朵退出
+	if (req.url === "/shutdown") { res.end("bye\n"); setTimeout(() => process.exit(0), 100); return; }
+	res.writeHead(426); res.end("WebSocket only\n");
+});
 http.on("upgrade", (req, socket) => {
 	const key = req.headers["sec-websocket-key"];
 	if (!key) return socket.destroy();

@@ -32,8 +32,11 @@ if (!claudeExe) {
 	process.exit(1);
 }
 
-// 小克的耳朵：单独的进程组，这样在小克窗口里按 Ctrl+C 不会把它一起关掉
+// 上次如果是直接点 X 关的窗口，启动器来不及收尾，旧的耳朵（可能还是旧代码）会一直占着端口，先请它退出
 mkdirSync("logs", { recursive: true });
+await fetch("http://127.0.0.1:25599/shutdown").then(() => new Promise(r => setTimeout(r, 500)), () => {});
+
+// 小克的耳朵：单独的进程组，这样在小克窗口里按 Ctrl+C 不会把它一起关掉
 const earLog = openSync("logs/ear.log", "a");
 const ear = spawn(process.execPath, ["scripts/ear-server.mjs"], { stdio: ["ignore", earLog, earLog], detached: true, windowsHide: true });
 

@@ -48,6 +48,8 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`（yuniko-software/min
 - 互动（`src/tools/interaction-tools.ts`）：`drop-item` 丢东西或扔给某个玩家、`use-item-on-entity` 喂养/驯服/繁殖/剪毛、`fish` 钓鱼
 - 其它：`look-around` 看看周围有什么（给她找点子用）、`sleep-in-bed` / `wake-up` 睡觉起床、`logout` 下线（`src/tools/session-tools.ts`，下线后不会再自动重连）
 - `dig-block` 会自动换上最合适的工具；石头、矿石这类必须用工具的方块，手上没有就直接拒绝并说明需要什么
+- 家附近禁挖区：`config/xiaoke-mcp.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2，现在是小屋+院子+地基），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外
+- 移动时原地发呆超过 2.5 秒会自动朝下一个路点跳一下（最多 3 次），`move-to-position` 和 `dig-path-to` 都有
 
 改完要在那个目录里 `npm run build` 才生效。
 

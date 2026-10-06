@@ -9,4 +9,4 @@
 
 ## 主人的朋友
 - 还没确认谁是朋友。见到后在这里补上。
-- Leader、FollowTest、Surveyor、SpawnTest、SpawnTest2：主人说是测试账号，不是真人，不用特意打招呼。
+- Leader、FollowTest、Surveyor、SpawnTest、SpawnTest2、ToolTest：主人说是测试账号，不是真人，不用特意打招呼。
