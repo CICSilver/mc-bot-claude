@@ -20,9 +20,10 @@ const NICK = process.env.MC_BOT_NICK ?? "小克";
 const COMPANIONS = new Set((process.env.MC_COMPANIONS ?? "").split(",").map(s => s.trim()).filter(Boolean));
 const COMPANION_CHAT_MS = Number(process.env.COMPANION_CHAT_SECONDS ?? 60) * 1000;
 const isBot = who => who === SELF || COMPANIONS.has(who);
-// 有人在线但一阵子没动静，就叫醒思维层一次（[空闲]），间隔每次在这个范围里随机
-const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 120) * 1000;
-const IDLE_MAX_MS = Number(process.env.IDLE_MAX_SECONDS ?? 300) * 1000;
+// 有人在线、思维层却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
+// 快速反应层那边的聊天不算思维层的动静
+const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 60) * 1000;
+const IDLE_MAX_MS = Number(process.env.IDLE_MAX_SECONDS ?? 150) * 1000;
 // 快速反应层那边一直热闹、思维层这么久没被叫醒过，就叫它回顾一下（[回顾]）
 const REVIEW_MS = Number(process.env.REVIEW_MINUTES ?? 4) * 60 * 1000;
 // 世界里只剩小克一个人这么久，就提醒她收拾收拾下线（[独处]）
@@ -48,6 +49,8 @@ const FAST = "fast", MIND = "mind";
 const ROUTES = {
 	聊天: [FAST], 进服: [FAST], 离开: [FAST], 成就: [FAST], 死亡: [FAST], 礼物: [FAST], 注视: [FAST], 召唤: [FAST],
 	危险: [FAST, MIND], 断线: [FAST, MIND],
+	// 身体看到的：思维层在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
+	琢磨: [FAST], 闲聊: [FAST],
 	进展: [MIND], 提醒: [MIND], 空闲: [MIND], 天气: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
 };
 
@@ -59,7 +62,7 @@ const pending = { [FAST]: [], [MIND]: [] };   // 那一层没在听时攒下的�
 const digest = [];
 let lastMindAt = Date.now();
 let fastQueue = Promise.resolve();   // 给快速反应层的事件要先问身体要〔现在〕，排好队免得顺序乱
-let idleTimer = null;
+let idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
 let journal = null;   // 读服务器日志的 ssh 进程，耳朵退出时一起关掉
 let busyUntil = 0;    // 小克在做后台长活（砍树、钓鱼、探险……）时不发 [空闲]，做完会有 [进展] 叫醒她
 let aloneSince = Date.now();   // 从什么时候起没有别人在线（有人在线时是 null）
@@ -80,8 +83,18 @@ function frame(text) {
 	return Buffer.concat([header, payload]);
 }
 
+// 告诉身体思维层这一轮开始了（一轮结束由思维层的 Stop hook 直接告诉身体）
+function mindStarted() {
+	fetch(`${BODY_URL}/mind-state`, {
+		method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ active: true }), signal: AbortSignal.timeout(1000),
+	}).catch(() => {});
+}
+
 function deliver(layer, text) {
-	if (layer === MIND) lastMindAt = Date.now();
+	if (layer === MIND) {
+		lastMindAt = Date.now();
+		if (clients[MIND].size) mindStarted();
+	}
 	if (clients[layer].size === 0) {
 		pending[layer].push(text);
 		if (pending[layer].length > 50) pending[layer].shift();
@@ -109,23 +122,35 @@ async function withSnapshot(line) {
 	return line;
 }
 
+// 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进思维层要看的“这段时间”
+const NUDGES = new Set(["琢磨", "闲聊"]);
+
 function emit(kind, body, to = ROUTES[kind]) {
+	if (NUDGES.has(kind) && !clients[FAST].size) return;
 	const line = `${ts()} [${kind}] ${body}`;
 	console.log(`${line}  → ${to.join("+")}`);
 	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
-	else remember(line.slice(6));   // 去掉日期，只留时:分
+	else if (!NUDGES.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
 	if (to.includes(FAST)) fastQueue = fastQueue.then(() => withSnapshot(line)).then(text => deliver(FAST, text)).catch(e => console.log(`${ts()} 发给快速反应层失败：${e}`));
-	resetIdle();
 }
 
-function resetIdle() {
-	clearTimeout(idleTimer);
-	const wait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
-	idleTimer = setTimeout(() => {
-		if (online.size && clients[MIND].size && Date.now() > busyUntil) emit("空闲", `有一会儿没什么动静了。接着过你自己的日子：推进手上的打算，或者看看周围冒个小点子。${onlineText()}`);
-		else resetIdle();
-	}, wait);
+// 思维层闲了多久：问身体（它从 hook 和工具调用知道这一轮结束了没有）；问不到就看多久没给它递过事件
+async function mindIdleMs() {
+	try {
+		const res = await fetch(`${BODY_URL}/mind-state`, { signal: AbortSignal.timeout(800) });
+		const state = await res.json();
+		return state.jobBusy ? 0 : Number(state.idleMs) || 0;
+	} catch {
+		return Date.now() - lastMindAt;
+	}
 }
+
+setInterval(async () => {
+	if (!online.size || !clients[MIND].size || Date.now() < busyUntil) return;
+	if (await mindIdleMs() < idleWait) return;
+	idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
+	emit("空闲", `你有一会儿没动静了。接着过你自己的日子：推进手上的打算，或者看看周围冒个小点子；在等雨停、等天亮也找点小事做。${onlineText()}`);
+}, 10 * 1000);
 
 // 同伴 bot 的聊天：没有真人在场就不转发；有真人时最多每 COMPANION_CHAT_MS 叫醒一次，中间攒下的几句合成一条
 const companionQueue = [];
@@ -229,12 +254,11 @@ function handleFrame(socket, buf) {
 // 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给思维层的事（记下）、开始 / 结束忙
 function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下"].includes(data.kind) && typeof data.text === "string") {
+	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "琢磨", "闲聊"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
 		busyUntil = data.busy ? Date.now() + 20 * 60 * 1000 : 0;   // 最多算 20 分钟“在忙”，免得任务卡死后再也不叫她
-		if (!data.busy) resetIdle();
 	} else throw new Error("unknown message");
 }
 
@@ -271,8 +295,9 @@ http.on("upgrade", (req, socket) => {
 	clients[layer].add(socket);
 	console.log(`${ts()} ${layer === MIND ? "思维层" : "快速反应层"}开始听了`);
 	socket.write(frame(`${ts()} [开始监听] ${onlineText()}`));
-	for (const line of pending[layer].splice(0)) socket.write(frame(line));
-	resetIdle();
+	const queued = pending[layer].splice(0);
+	for (const line of queued) socket.write(frame(line));
+	if (layer === MIND && queued.length) mindStarted();
 });
 http.on("error", e => {
 	if (e.code === "EADDRINUSE") { console.log(`端口 ${PORT} 已被占用，应该已经有一个耳朵在运行了`); process.exit(0); }

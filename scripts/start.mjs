@@ -124,7 +124,7 @@ function runClaude() {
 		"--mcp-config", join(ROOT, "logs", `mcp-${layer}.json`),           // 只连身体上这一层能用的那些工具
 		"--strict-mcp-config",                                             // 只加载 Minecraft 这一个 MCP，账号里的其它连接器一律不给
 		"--setting-sources", "project",                                    // 不读用户级的全局设置
-		"--settings", join(ROOT, "config", `xiaoke-${layer}-settings.json`),  // 这一层的权限只在这里给，不影响在本目录开的普通会话
+		"--settings", join(ROOT, "logs", `settings-${layer}.json`),        // 这一层的权限（config/xiaoke-*-settings.json，思维层另加 hook），不影响在本目录开的普通会话
 		"--permission-mode", "dontAsk",                                    // 允许列表以外的操作全部自动拒绝
 		"--disable-slash-commands",                                        // 不加载各种技能，小克用不上
 		...sessionArgs(),
@@ -212,11 +212,19 @@ if (layer === "mind") {
 		process.exit(1);
 	}
 
-	// 每层的设定 = 共用的人设和世界（persona.md）+ 这一层自己的规则；每层只连身体上自己的那个地址
-	const persona = readFileSync("prompts/persona.md", "utf8");
+	// 每层的设定 = 共用的人设和世界（persona.md）+ 这一层自己的规则；每层只连身体上自己的那个地址。
+	// 服务器数据包的 /trigger 只认正式的登录名，测试版（datapackTriggers: false）另加一段说明
+	let persona = readFileSync("prompts/persona.md", "utf8").trimEnd();
+	if (CONFIG.datapackTriggers === false) persona += `\n\n${readFileSync("prompts/no-triggers.md", "utf8").trimEnd()}`;
+	// 思维层的一轮什么时候开始、调了什么工具、什么时候结束，由 Claude Code 的 hook 直接告诉身体：身体据此知道她是不是在深想
+	const hook = [{ hooks: [{ type: "http", url: `${BODY_URL}/hook` }] }];
+	const anyTool = [{ matcher: "*", hooks: hook[0].hooks }];
 	for (const name of Object.keys(LAYERS)) {
-		writeFileSync(`logs/prompt-${name}.md`, fill(`${persona.trimEnd()}\n\n---\n\n${readFileSync(`prompts/${name}.md`, "utf8")}`));
+		writeFileSync(`logs/prompt-${name}.md`, fill(`${persona}\n\n---\n\n${readFileSync(`prompts/${name}.md`, "utf8")}`));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
+		const settings = JSON.parse(readFileSync(`config/xiaoke-${name}-settings.json`, "utf8"));
+		if (name === "mind") settings.hooks = { UserPromptSubmit: hook, PreToolUse: anyTool, PostToolUse: anyTool, Stop: hook };
+		writeFileSync(`logs/settings-${name}.json`, JSON.stringify(settings, null, 2));
 	}
 
 	// 思维层另开一个窗口（start 会给它一个新的控制台）
