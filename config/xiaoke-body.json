@@ -1,0 +1,9 @@
+{
+  "mcp": "../minecraft-mcp-server-xiaoke",
+  "args": ["--host", "mc.lemalin.icu", "--port", "25565", "--username", "clawd"],
+  "env": {
+    "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
+    "XIAOKE_ALIASES": "admin=CICSilver",
+    "XIAOKE_COMPANIONS": "Moby"
+  }
+}
