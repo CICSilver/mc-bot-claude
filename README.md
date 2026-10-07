@@ -87,6 +87,11 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 - 被碰到（[互动]）：有人冲她蹲几下，她蹲回去；有人蹲在跟前凑近看她的脑袋，算摸头，她呼噜一声冒爱心；远远冲她挥手，她挥回去；被打、被雪球砸，几秒内合成一条，写清楚是谁、拿什么、掉了多少血（伤害来源是服务器给的，摸头和挥手是从姿势猜的）
 - 注意到的事（[看见]）：她亲手放下的方块身体都记着（`state/belongings.json`），有人挖掉、踩坏她的田、打开她的箱子、杀她圈里的动物，或者她回到家附近发现东西不见了，都会知道；身边的人受伤快不行了、拿着鱼凑在旁边、走进她家，也会知道。看见是谁挖的写“亲眼看见是 TA”，只是离得近写“离得最近的是 TA”
 - 〔现在〕里近处的人后面会写手里拿着什么、血少不少、是不是蹲着
+
+言行连贯（Codex 规划的 P0、P1）：
+- 身体控制权（`src/body.ts`）：视线、移动姿势、手三份，按“避险 > 正事（长活、工具、游戏、坐着）> 社交小动作（表情、蹲回去、看过去）> 闲着的小动作（转头看人、琢磨时晃一晃）”分配。表情、被碰到的反应、闲着的小动作、捉迷藏、坐船、逃跑都先申请；更急的来了会打断更低的（比如来怪时表情和捉迷藏马上停）；放开时只松开自己按下的键
+- 〔现在〕分开写：正在用（身体此刻在跑的动作）、手上（长活，或者暂停着的）、刚发生（这几分钟身体发出去的事件）、打算（思维层写的，在等的东西到了会标“可能已经过时”）、在等（share-plan 的 waitingFor，能用背包核对的身体会看着，到了给思维层一条 [进展]）
+- 长活暂停和续做（`src/jobs.ts`）：陪人、玩游戏、躲怪时暂停而不是丢掉，记着做到哪；身体空下来又安全时自己接着做并告诉思维层；天黑、下雨、饿了、背包满了、材料用完也是暂停，等思维层 `resume-job`。砍树挖矿接着挖剩下的数，盖东西接着盖没放的块（先看还没盖的格子有没有被人动过，动过就停下来说哪几格，`skipChanged` 才绕开盖，不拆别人的方块），收庄稼重看一遍田；钓鱼、探险、引动物、追动物接不上。`pause-job` / `resume-job` 两层都有，`stop-job` 是取消。暂停的活存在 home 的 `state/paused-job.json`，重启后还在但不会自己接着做
 - Monitor 每 30 分钟到期一次，到期时两层都会自己重新连上
 - 身体和耳朵都盯着启动器：直接点 X 关了窗口，身体会让机器人下线再退出，耳朵也跟着退出。启动器每次启动前也会先请旧耳朵退出
 - 日志：耳朵在 `logs/ear.log`，身体在 `logs/body.log`
@@ -105,6 +110,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `prompts/no-triggers.md` | 测试版说明：`/trigger xiaoke_*` 用不了，安家只记坐标。`config/xiaoke-body.json` 里 `datapackTriggers` 是 false 时，启动器把它接在人设后面 |
 | `scripts/ear-server.mjs` | 小克的耳朵；也是她跟服务器控制台之间的线，身体要冒气泡、喵一声时找它 |
 | `scripts/world-fx.mjs` | 把气泡、声音、粒子变成调用数据包 `xiaoke_fx` 的控制台命令，只认固定的几种，文字先过滤（`node --test scripts/world-fx.test.mjs`） |
+| `server/xiaoke-bridge` | 服务器模组 xiaoke-bridge 的源码（只装服务器，玩家不用装），`python server/xiaoke-bridge/build.py` 编译成 `build/xiaoke-bridge-1.0.0.jar`，说明见那里的 README |
 | `server/datapacks/xiaoke_fx` | 服务器上的数据包源文件（装在服务器 `world/datapacks/xiaoke_fx`）：气泡是一个 text_display，每 tick 挪到主人头顶、到时间收掉，主人下线也收掉；声音和粒子在主人身上放。几个 AI 玩家可以同时用 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开思维层的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
 | `scripts/measure.mjs` | 体检：从会话记录里算出她多久回话、正忙时回话要多久、每次想了多少、长活顺不顺，单层和两层的会话可以放一起比（`--list` 列出所有小克会话）。怎么测见 [测试方案.md](测试方案.md) |
@@ -142,6 +148,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 被碰到（`src/touch.ts`）：冲她蹲、摸头、挥手、戳、打、雪球砸（`damage_event` 里的来源），身边人血少、拿着鱼。AI 同伴只算打她
 - 她的东西（`src/belongings.ts`）：记住她放下的方块（mineflayer 的 `blockPlaced`，门和床的另一半，锄地播种），别人挖掉、踩田、开箱子、杀圈里的动物、回来发现不见了、有访客走进她家；她自己挖的、庄稼长大、没种东西的田变回泥土不算。`claim-home` 把这个功能之前盖的东西认作她的
 - 留下痕迹（`src/tools/trace-tools.ts`）：`put-sign` 立告示牌或改写自己的牌子；`write-book` 写书（填 title 就署名）；`read-book` 读背包里或讲台上的书；`name-item` 在铁砧给东西起名（命名牌）；`look-around` 会念出附近告示牌上的字
+- 跟服务器模组 xiaoke-bridge 对接（`src/touch.ts`、`src/gifts.ts`、`src/games.ts`、`src/idle.ts`）：只认系统消息 `[xiaoke-bridge] pet|hold|give|give-full ...`（玩家打的字、私聊都不是系统消息，冒充不了）；`ride` 的 kind=seat 空着手右键楼梯、半砖、地毯坐下。站起来统一用 `standUp`：mineflayer 的 `bot.dismount()` 发的是“跳”，26.1 只认潜行，所以按一下潜行
 - 一起玩（`src/games.ts`、`src/play.ts`、`src/tools/play-tools.ts`）：`ride` / `get-off` 跟人坐同一条船、矿车、骆驼；`throw-at` 扔雪球鸡蛋（会算抛物线）；`use-item` 吹山羊角、看望远镜；`hide-and-seek` 捉迷藏（她找时背身数数、只有真看见才算找到；她藏时找一个对方看不见的地方蹲好）、`stop-game`；`play-note-blocks` 按简谱自己调音再弹音符盒。玩游戏、坐船时用别的动身体的工具会先结束游戏、下船
 
 改完要在那个目录里 `npm run build` 才生效。
@@ -158,6 +165,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 屋顶正中间 (0, 136, 0) 开了个天窗：游戏会把出生的人放在重生点那一列最高的方块上，有屋顶的话大家会出生在屋顶上
 - 改了数据包后执行 `reload`，还要再执行一次 `function safezone:load`（这个版本 reload 不会自动跑初始化，不跑的话每秒清怪和各种 trigger 会停）
 - 服务器的出生点保护已经关掉（`spawn-protection=0`），不然非管理员在出生点附近挖不了东西
+- 模组 `mods/xiaoke-bridge-1.0.0.jar`（10-07 装的，源码在本仓库 `server/xiaoke-bridge`，配置 `config/xiaoke-bridge.json` 里写着哪些是 AI 玩家）：玩家空手右键小克是摸头、蹲着右键是牵手、拿着东西右键是直接递给她（不用扔在地上），服务器给小克发一条系统消息，身体转成 [互动] / [礼物]，头顶冒爱心、呼噜一声；谁都可以空手右键楼梯（下半）、下半砖、地毯坐下，按潜行起来。小克用 `ride` 填 kind=seat 坐，琢磨事情时旁边有楼梯也会坐上去想
 - 数据包 `world/datapacks/xiaoke_fx`：气泡、猫叫、粒子（源文件在本仓库 `server/datapacks/xiaoke_fx`）。耳朵通过 ssh 把 `function xiaoke_fx:...` 写进控制台（`/run/minecraft.stdin`）
 - `server.properties` 里 `broadcast-console-to-ops=false`（10-07 改的，原来的备份在 `server.properties.bak-20261007-xiaoke-fx`）：不然控制台每执行一条命令，在线的管理员（admin）聊天里都会冒一行“[Server: Running function ...]”。耳朵启动时会检查这一项、数据包在不在、改完有没有重启，不满足就先不发效果（日志里写原因）；`XIAOKE_FX=off` 关掉，`XIAOKE_FX=on` 不检查直接开
 
