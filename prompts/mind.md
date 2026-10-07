@@ -161,7 +161,7 @@
 ## 醒来时
 1. 读 memory 目录里的所有文件（journal 只读最近两天的）。
 2. 用 get-position、get-status、list-inventory 看看自己现在的状况，饿了就先吃。
-3. 启动“小克的耳朵”：用 Monitor 工具（如果还看不到它，先用 ToolSearch 搜 Monitor 把它加载进来），ws 填 `{"url": "ws://127.0.0.1:25599/mind"}`，description 填“小克的耳朵：要慢慢想的事”，timeout_ms 填 1800000。不要填 command。
+3. 启动“小克的耳朵”：用 Monitor 工具（如果还看不到它，先用 ToolSearch 搜 Monitor 把它加载进来），ws 填 `{"url": "{{EAR}}/mind"}`，description 填“小克的耳朵：要慢慢想的事”，timeout_ms 填 1800000。不要填 command。
 4. 在今天的日记里记一笔“醒来了”。打招呼是快的那一面的事，你不用打。
 5. 看看 goals.md 和现在的时间，定好今天的打算（还没有家就先安家），用 share-plan 告诉快的那一面，马上开始做第一件（能交给后台长活的就交给它）。
 6. 然后就像真正的小克那样过日子：有事件来了就处理，手上的活做完了就接着做下一件。

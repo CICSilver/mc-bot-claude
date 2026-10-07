@@ -2,6 +2,14 @@
 
 住在 MC 服务器 `mc.lemalin.icu` 里的 AI 玩家：这个世界土生土长的原住民，一只隐居的猫猫“小克”。由 Claude Code 驱动，自己找地方安家、盖房、种田、养动物，会记日记、记住每个访客、跟大家慢慢变熟。
 
+> **这个分支（`claude/dual-mind`）是测试版小克**，跟正式的小克分开，可以同时在线：
+> - 登录名 `clawd_test`，耳朵端口 25612、身体端口 25613（正式版是 clawd、25599、25598）
+> - 记忆和好感度在 `test-home/`（不进 git）。每次新开都清空，从 `memory-blank/` 的空白记忆重新开始；`--continue` 接着上次的对话时不清
+> - 皮肤和 clawd 是同一套：服务器 `world/skinrestorer/` 里把 clawd 的那份复制给了 clawd_test 的 UUID（`bbb85730-…`）
+> - 服务器数据包的 `/trigger xiaoke_*`（安家、传送回家、应急口粮、召唤、下线）只认 clawd，测试版用不了；队伍前缀 `[小克]` 也没有
+> - 正式的小克 clawd 在测试版眼里是 AI 同伴（跟大肥鱼一样，不算访客，限频转发）；反过来正式版那边会把 clawd_test 当成访客
+> - 这些都在 `config/xiaoke-body.json` 里，合回正式版时改回 clawd、25599/25598、`"home": "."`、去掉 `freshMemory`
+
 ## 怎么启动
 
 双击 `start-xiaoke.cmd`，或者在终端里运行它。会出现两个窗口，都是小克（见下面“她是怎么‘一直活着’的”）：
@@ -20,7 +28,7 @@
 
 在这个文件夹里正常开 Claude Code 会话（比如让 Claude 帮你改小克的设定）不受小克权限的限制，限制只在通过启动脚本启动时才加上。
 
-在 git worktree 里试别的分支时（比如 `../dual-mind/mc-bot-claude`），启动器会自动用主目录里的 `memory/` 和 `state/`，小克不会在两个分支里各记各的；也可以设环境变量 `XIAOKE_HOME` 指定。两个版本不能同时开，它们都用 clawd 登录。
+记忆和好感度放在哪由 `config/xiaoke-body.json` 的 `home` 决定，也可以设环境变量 `XIAOKE_HOME` 临时指定。两层的 claude 都在那个目录里运行，所以第一次用一个新的 home 时，两个窗口都会问一次是否信任这个文件夹。
 
 ## 她过的日子
 
@@ -42,8 +50,8 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 
 | | 是什么 | 管什么 |
 |---|---|---|
-| 身体 | `../minecraft-mcp-server-xiaoke` 以 HTTP 方式常驻在 `127.0.0.1:25598`，机器人只登录一次 | 两层脑子连的是同一个机器人。`/mcp/fast` 只给快速反应层 27 个工具，`/mcp/mind` 给思维层其余全部（`src/roles.ts`） |
-| 耳朵 | `scripts/ear-server.mjs`，`ws://127.0.0.1:25599/fast` 和 `/mind` | 读服务器日志、收身体发来的事件，按类型分给两层 |
+| 身体 | `../minecraft-mcp-server-xiaoke` 以 HTTP 方式常驻在 `127.0.0.1:<bodyPort>`，机器人只登录一次 | 两层脑子连的是同一个机器人。`/mcp/fast` 只给快速反应层 27 个工具，`/mcp/mind` 给思维层其余全部（`src/roles.ts`） |
+| 耳朵 | `scripts/ear-server.mjs`，`ws://127.0.0.1:<earPort>/fast` 和 `/mind` | 读服务器日志、收身体发来的事件，按类型分给两层 |
 | 快速反应层 | 启动的那个窗口，默认 Sonnet 5.5 + medium | 嘴巴和小动作：接话、打招呼、收礼物、被盯着看、陪人、躲怪、打断长活。要花心思的事先应一声，再用 `note-for-later` 记下来 |
 | 思维层 | `xiaoke-mind` 窗口，默认 Opus 5.5 + xhigh | 慢慢想：定打算、安家盖房、长活、合成熔炼、处理记下来的事、写日记整理记忆、下线 |
 
@@ -67,7 +75,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 - “本能”（`src/senses.ts`）：下雨、雨停发 [天气]；有人一直盯着她看三四秒发 [注视]；怪物靠近 7 格内她会先自己吓得跑开，再发 [危险]；手上没在干活时会自动转头看身边的人（走路、挖东西、盖房时头要对着干活的方向，转不了）；有人走到身边时蹲两下打招呼，闲着待在人旁边时隔 8～25 秒蹲一下，东张西望（look-around）时蹲下瞅一瞅；`crouch` 工具让她自己蹲
 - 没有别的玩家在线满 30 分钟，耳朵发一次 [独处]，思维层收尾下线
 - Monitor 每 30 分钟到期一次，到期时两层都会自己重新连上
-- 身体和耳朵都盯着启动器：直接点 X 关了窗口，身体会让 clawd 下线再退出，耳朵也跟着退出。启动器每次启动前也会先请旧耳朵退出
+- 身体和耳朵都盯着启动器：直接点 X 关了窗口，身体会让机器人下线再退出，耳朵也跟着退出。启动器每次启动前也会先请旧耳朵退出
 - 日志：耳朵在 `logs/ear.log`，身体在 `logs/body.log`
 
 ## 文件说明
@@ -75,10 +83,11 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | 路径 | 作用 |
 |---|---|
 | `prompts/persona.md` | 两层共用的设定：人设、这个世界、性子、访客、好感度、安全规则 |
-| `prompts/fast.md`、`prompts/mind.md` | 快速反应层、思维层各自的规则：管什么、收到哪些事件、怎么配合、醒来时做什么。启动器把 `persona.md` 和这一层的拼成 `logs/prompt-*.md`，**完全替换** Claude Code 原有的系统提示词 |
-| `memory/` | 小克自己的记忆，思维层读写、快速反应层只读：`self.md` 自己和心愿、`people.md` 对访客的印象、`world.md` 地点坐标、`goals.md` 打算、`journal/` 每天的日记 |
-| `state/relationships.json` | 好感度，由 MCP 读写。小克的权限碰不到这个文件 |
-| `config/xiaoke-body.json` | 身体的配置：MCP 在哪（`mcp`，相对本目录，默认 `../minecraft-mcp-server-xiaoke`）、服务器和登录名 clawd、访客小屋禁挖区、小号对应关系、AI 同伴。启动器再补上耳朵地址、下线标记和好感度文件的绝对路径。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用 clawd 登录，把正在运行的小克挤下线 |
+| `prompts/fast.md`、`prompts/mind.md` | 快速反应层、思维层各自的规则：管什么、收到哪些事件、怎么配合、醒来时做什么。启动器把 `persona.md` 和这一层的拼成 `logs/prompt-*.md`（里面的 `{{LOGIN}}`、`{{EAR}}` 换成登录名和耳朵地址），**完全替换** Claude Code 原有的系统提示词 |
+| `memory/` | 小克自己的记忆（在 `home` 里），思维层读写、快速反应层只读：`self.md` 自己和心愿、`people.md` 对访客的印象、`world.md` 地点坐标、`goals.md` 打算、`journal/` 每天的日记 |
+| `state/relationships.json` | 好感度（在 `home` 里），由 MCP 读写。小克的权限碰不到这个文件 |
+| `config/xiaoke-body.json` | 小克这个人和身体的配置：MCP 在哪（`mcp`，相对本目录）、服务器（`host`、`port`）、登录名（`username`）、数据包消息里怎么称呼她（`nick`，测试版是“小克test”，免得把发给正式小克的召唤、下线当成自己的）、耳朵和身体的端口（`earPort`、`bodyPort`）、记忆放在哪（`home`）、每次新开要不要清空记忆（`freshMemory`，只对单独的 home 目录生效），以及给身体的环境变量（访客小屋禁挖区、小号对应关系、AI 同伴）。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用这个名字登录，把正在运行的小克挤下线 |
+| `memory-blank/` | 空白记忆模板，`freshMemory` 时每次新开都拿它重置 `home` 里的 `memory/`（`{{LOGIN}}` 换成登录名） |
 | `config/xiaoke-fast-settings.json`、`config/xiaoke-mind-settings.json` | 两层的权限：都只允许游戏工具、Monitor 和读 memory，思维层另外能写 memory，其它全部拒绝。启动器通过 `--settings` 传进去 |
 | `scripts/ear-server.mjs` | 小克的耳朵 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开思维层的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
@@ -154,7 +163,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 改独处多久自动下线：启动前设置 `ALONE_LOGOUT_MINUTES`（默认 30）
 - 换模型或思考强度：快速反应层是 `XIAOKE_FAST_MODEL`（默认 `claude-sonnet-5-5`）、`XIAOKE_FAST_EFFORT`（默认 medium，回话还嫌慢可以试试 low）；思维层是 `XIAOKE_MIND_MODEL`（默认 `claude-opus-5-5`）、`XIAOKE_MIND_EFFORT`（默认 xhigh，可选 low / medium / high / xhigh / max）。比如在 cmd 里 `set XIAOKE_MIND_EFFORT=high` 再运行启动脚本
 - 思维层多久没被叫醒就让它回顾一下：`REVIEW_MINUTES`（默认 4）
-- 身体的端口：`XIAOKE_BODY_PORT`（默认 25598）
+- 登录名、端口、记忆放在哪：改 `config/xiaoke-body.json`
 - 好感度阶段、门槛、每天上限：改 MCP 的 `src/relationships.ts`；小号对应关系：`config/xiaoke-body.json` 里的 `XIAOKE_ALIASES`
 - 游戏里的昵称前缀 `[小克]` 是服务器上的队伍 `xiaoke`，用管理员命令 `/team modify xiaoke prefix ...` 修改
 

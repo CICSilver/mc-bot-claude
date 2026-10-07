@@ -8,12 +8,15 @@
 //      node scripts/start.mjs --mind [--continue]   第 3 步自动调用的，不用手动跑
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
+
+// 身体和小克这个人的配置：登录名、端口、记忆放在哪。路径相对本目录写，换台电脑也能用
+const CONFIG = JSON.parse(readFileSync("config/xiaoke-body.json", "utf8"));
 
 // 换模型、思考强度用环境变量，比如 set XIAOKE_MIND_EFFORT=high
 const LAYERS = {
@@ -30,8 +33,8 @@ const LAYERS = {
 		wake: "你是慢慢想的那一面",
 	},
 };
-const EAR_PORT = 25599;
-const BODY_PORT = Number(process.env.XIAOKE_BODY_PORT) || 25598;
+const EAR_PORT = Number(CONFIG.earPort) || 25599;
+const BODY_PORT = Number(process.env.XIAOKE_BODY_PORT) || Number(CONFIG.bodyPort) || 25598;
 const BODY_URL = `http://127.0.0.1:${BODY_PORT}`;
 const LOGOUT_FLAG = join(ROOT, "logs", "logout.flag");
 const MIND_PID = join(ROOT, "logs", "mind.pid");
@@ -59,25 +62,35 @@ function findClaude() {
 	return versions.length ? join(base, versions.at(-1), "claude.exe") : null;
 }
 
-// 小克的记忆（memory/）和好感度（state/）放在哪：平时就是本目录。
-// 在 git worktree 里试别的分支时用主目录里的那份，免得小克在两个分支里各记各的；也可以用 XIAOKE_HOME 指定
-function findHome() {
-	if (process.env.XIAOKE_HOME) return resolve(process.env.XIAOKE_HOME);
-	const dotGit = join(ROOT, ".git");
-	if (existsSync(dotGit) && statSync(dotGit).isFile()) {
-		const gitdir = readFileSync(dotGit, "utf8").match(/^gitdir:\s*(.+)$/m)?.[1].trim();   // <主目录>/.git/worktrees/<名字>
-		if (gitdir) return resolve(ROOT, gitdir, "..", "..", "..");
-	}
-	return ROOT;
-}
-
 const claudeExe = findClaude();
 if (!claudeExe) {
 	console.error("找不到 claude 程序，请先安装 Claude Code 或 Claude 桌面应用。");
 	process.exit(1);
 }
-const HOME = findHome();
+// 小克的记忆（memory/）和好感度（state/）放在哪：config 里的 home（默认本目录），也可以用 XIAOKE_HOME 指定
+const HOME = resolve(process.env.XIAOKE_HOME || CONFIG.home || ".");
 mkdirSync("logs", { recursive: true });
+mkdirSync(HOME, { recursive: true });
+
+// freshMemory：每次新开（不是 --continue）都从空白记忆开始，测试用。
+// 只在 home 是单独的目录时才清，免得把正式的记忆（本目录的 memory/）清掉
+function resetMemory() {
+	if (resolve(HOME) === resolve(ROOT)) {
+		console.log("freshMemory 只用在单独的 home 目录上，这次没有清记忆。");
+		return;
+	}
+	rmSync(join(HOME, "memory"), { recursive: true, force: true });
+	rmSync(join(HOME, "state"), { recursive: true, force: true });
+	cpSync("memory-blank", join(HOME, "memory"), { recursive: true });
+	for (const name of readdirSync(join(HOME, "memory"))) {
+		const file = join(HOME, "memory", name);
+		if (name.endsWith(".md")) writeFileSync(file, fill(readFileSync(file, "utf8")));
+	}
+	console.log(`记忆和好感度已清空，从 memory-blank 重新开始（${HOME}）。`);
+}
+
+// 提示词和空白记忆里的 {{LOGIN}}、{{EAR}} 换成这一次的登录名和耳朵地址
+const fill = text => text.replaceAll("{{LOGIN}}", CONFIG.username).replaceAll("{{EAR}}", `ws://127.0.0.1:${EAR_PORT}`);
 
 // 从桌面应用的终端里启动时会带上它的会话变量，独立运行的 claude 会因此登录失败
 const claudeEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
@@ -144,13 +157,12 @@ if (layer === "mind") {
 	claude.on("error", e => { console.error("启动 claude 失败：", e.message); stop(1); });
 } else {
 	// ---- 快速反应层的窗口：先把身体、耳朵、思维层都安排好 ----
-	// config/xiaoke-body.json 里的路径相对本目录写，换台电脑也能用
-	const bodyConfig = JSON.parse(readFileSync("config/xiaoke-body.json", "utf8"));
-	const mcpMain = resolve(bodyConfig.mcp, "dist", "main.js");
+	const mcpMain = resolve(CONFIG.mcp, "dist", "main.js");
 	if (!existsSync(mcpMain)) {
-		console.error(`找不到 ${mcpMain}，先在 ${resolve(bodyConfig.mcp)} 里运行 npm install 和 npm run build。`);
+		console.error(`找不到 ${mcpMain}，先在 ${resolve(CONFIG.mcp)} 里运行 npm install 和 npm run build。`);
 		process.exit(1);
 	}
+	if (CONFIG.freshMemory && !resume) resetMemory();
 
 	// 上次如果是直接点 X 关的窗口，旧的耳朵可能还占着端口，先请它退出（旧的身体看到旧启动器不在了会自己下线）
 	await fetch(`http://127.0.0.1:${EAR_PORT}/shutdown`).then(() => sleep(500), () => {});
@@ -163,21 +175,29 @@ if (layer === "mind") {
 
 	// 身体：单独的进程组，在窗口里按 Ctrl+C 不会把它一起关掉；这个启动器没了它会自己下线
 	const bodyLog = openSync("logs/body.log", "a");
-	const body = spawn(process.execPath, [mcpMain, ...bodyConfig.args, "--http-port", String(BODY_PORT), "--parent-pid", String(process.pid)], {
+	const body = spawn(process.execPath, [
+		mcpMain, "--host", CONFIG.host, "--port", String(CONFIG.port), "--username", CONFIG.username,
+		"--http-port", String(BODY_PORT), "--parent-pid", String(process.pid),
+	], {
 		stdio: ["ignore", bodyLog, bodyLog], detached: true, windowsHide: true,
 		env: {
-			...process.env, ...bodyConfig.env,
+			...process.env, ...CONFIG.env,
+			XIAOKE_BOT_NICK: CONFIG.nick ?? "小克",
 			XIAOKE_EAR_URL: `http://127.0.0.1:${EAR_PORT}`,
 			XIAOKE_LOGOUT_FLAG: LOGOUT_FLAG,
 			XIAOKE_RELATIONSHIPS: join(HOME, "state", "relationships.json"),
 		},
 	});
 
-	// 耳朵。大肥鱼（Moby，../mc-bot-deepseek）是同一个服务器上的 AI 同伴：不算访客，它说的话只在有真人在线时才转发
+	// 耳朵。AI 同伴（大肥鱼 Moby，测试时还有正式的小克 clawd）不算访客，它们说的话只在有真人在线时才转发
 	const earLog = openSync("logs/ear.log", "a");
 	const ear = spawn(process.execPath, ["scripts/ear-server.mjs"], {
 		stdio: ["ignore", earLog, earLog], detached: true, windowsHide: true,
-		env: { ...process.env, MC_COMPANIONS: bodyConfig.env.XIAOKE_COMPANIONS ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL },
+		env: {
+			...process.env,
+			EAR_PORT: String(EAR_PORT), MC_BOT_NAME: CONFIG.username, MC_BOT_NICK: CONFIG.nick ?? "小克",
+			MC_COMPANIONS: CONFIG.env?.XIAOKE_COMPANIONS ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL,
+		},
 	});
 
 	// claude 一启动就会去连 MCP，身体得先准备好
@@ -195,7 +215,7 @@ if (layer === "mind") {
 	// 每层的设定 = 共用的人设和世界（persona.md）+ 这一层自己的规则；每层只连身体上自己的那个地址
 	const persona = readFileSync("prompts/persona.md", "utf8");
 	for (const name of Object.keys(LAYERS)) {
-		writeFileSync(`logs/prompt-${name}.md`, `${persona.trimEnd()}\n\n---\n\n${readFileSync(`prompts/${name}.md`, "utf8")}`);
+		writeFileSync(`logs/prompt-${name}.md`, fill(`${persona.trimEnd()}\n\n---\n\n${readFileSync(`prompts/${name}.md`, "utf8")}`));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
 	}
 

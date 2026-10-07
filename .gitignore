@@ -26,3 +26,6 @@ Thumbs.db
 # Keep the explicitly archived prototype artifacts, not its build cache
 /skin/archive/cpm-prototype/build/
 /skin/archive/cpm-prototype/screenshots/
+
+# 测试用的小克（clawd_test）每次启动都从空白记忆开始，见 config/xiaoke-body.json 的 home
+/test-home/
