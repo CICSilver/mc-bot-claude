@@ -99,7 +99,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - mineflayer 升到 4.39.0 以支持 26.1，去掉了进服时自动发的英文消息
 - 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、`attack-entity` 打猎自卫、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
 - 后台长活（`src/jobs.ts`、`src/tools/job-tools.ts`）：`gather-blocks` 砍树挖矿采花，`harvest-crops` 收庄稼并补种，`go-fishing` 钓一阵子鱼，`explore` 往一个方向探险、找到想找的东西就停，`lure-animals` 拿着吃的把动物引过去，`stop-job` 停下。会自己换工具、捡掉落物，遇到天黑、来怪、受伤、饿了、背包满了就停下
-- 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、用 “.” 挖空），`build-house` 应急的方盒子小屋，`build-fence` 围栅栏，`make-farm` 开垦农田并播种、可以在中间放水。都会先核对材料
+- 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、门和栅栏门、用 “.” 挖空），`build-house` 应急的方盒子小屋（背包里有木门就装上），`build-fence` 围栅栏（有栅栏门就装在口子上），`make-farm` 开垦农田并播种、可以在中间放水。都会先核对材料
 - 好感度和礼物（`src/relationships.ts`、`src/gifts.ts`、`src/tools/relationship-tools.ts`）：`get-relationships`、`change-affinity`（一次 -30～+15，每人每天最多涨 25，心上人只能有一个）。阶段和门槛在 `src/relationships.ts` 的 `STAGES` 里
 - 本能（`src/senses.ts`）：天气、注视、危险事件，转头看人，`run-away` 逃跑；`chase-animal` 追着小动物玩。`XIAOKE_COMPANIONS` 里的 AI 同伴不算“盯着看”。在外面干长活时下起雨会自动停手
 - 熔炉（`src/tools/furnace-tools.ts`）：`smelt-item` 放进去就返回，烧好了发 [进展]；`take-from-furnace` 取出来
@@ -116,6 +116,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 寻路不会挖穿木板、圆石、玻璃、栅栏、门、楼梯、半砖、箱子、床、农田、庄稼等玩家造的东西（包括她自己盖的房子）；平时不垫方块往上爬，只有 `dig-path-to` 才会（`src/movement-utils.ts`）
 - 访客小屋禁挖区：`config/xiaoke-body.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2，出生点小屋+院子+地基），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外；她也不能在那里盖东西
 - 移动时原地发呆超过 2.5 秒会自动朝下一个路点跳一下（最多 3 次）
+- 门（`src/doors.ts`）：mineflayer-pathfinder 原本把门当墙（开着的也过不去），现在寻路把木门、铜门、栅栏门当成能走过去的格子（关着的稍微贵一点，能绕一两步就绕），走到跟前自己开门，过去后把自己开的门随手关上；她进门那一侧 4 格内有人、门口站着人或动物时先不关，`lure-animals` 引动物时也先开着。点两次都没反应的门一分钟内绕开走。铁门还是当墙。`use-door` 手动开关门、栅栏门和活板门
 - 视距只要 4 个区块（`XIAOKE_VIEW_DISTANCE` 可改）：服务器出口只有约 5 Mbps，按服务器视距 10 推区块会把带宽占满好几秒，真人玩家会卡住。实测视距 4 进服 1.3 MB（原来 4.5 MB），身边 80 格内仍然都是加载好的
 - 挑工具（`src/tool-choice.ts`）：换掉了 mineflayer-pathfinder 的 `bestHarvestTool`（没有比空手快的工具时它会随手拿背包第一件东西，于是拿镐挖土），并包住 `bot.dig`：所有挖掘都先换上真正更快的工具，用不上工具时不拿会磨损的东西，草和花不换工具；换装备排队进行；工具坏了、快坏了会写进 [进展] 和 `dig-block` 的回复，`list-inventory` 显示每件还能用几次
 - 盔甲（`src/armor.ts`）：背包里有更好的盔甲就自动穿上（皮 < 铜 < 金 < 锁链 < 铁 < 钻石 < 下界合金），干后台长活时等闲下来再换；`get-status` 显示身上穿着什么
