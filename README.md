@@ -91,6 +91,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `config/xiaoke-fast-settings.json`、`config/xiaoke-mind-settings.json` | 两层的权限：都只允许游戏工具、Monitor 和读 memory，思维层另外能写 memory，其它全部拒绝。启动器通过 `--settings` 传进去 |
 | `scripts/ear-server.mjs` | 小克的耳朵 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开思维层的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
+| `scripts/measure.mjs` | 体检：从会话记录里算出她多久回话、正忙时回话要多久、每次想了多少、长活顺不顺，单层和两层的会话可以放一起比（`--list` 列出所有小克会话）。怎么测见 [测试方案.md](测试方案.md) |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
 
 Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
