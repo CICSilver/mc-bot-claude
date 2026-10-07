@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>小克皮肤渲染</title>
+<style>html,body{margin:0;background:#c7c7c7;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{"imports":{"three":"/deps/three/build/three.module.js"}}
+</script>
+<canvas id="model"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { SkinObject } from '/deps/skinview3d/libs/model.js';
+
+const canvas = document.querySelector('canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:false, preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#c7c7c7');
+scene.add(new THREE.AmbientLight(0xffffff, 2.4));
+const light = new THREE.DirectionalLight(0xffffff, 1.1);
+light.position.set(-20, 40, 45);
+scene.add(light);
+const camera = new THREE.OrthographicCamera();
+const skin = new SkinObject();
+skin.modelType = 'slim';
+scene.add(skin);
+const texture = await new THREE.TextureLoader().loadAsync('/xiaoke-skin.png');
+texture.colorSpace = THREE.SRGBColorSpace;
+texture.magFilter = THREE.NearestFilter;
+texture.minFilter = THREE.NearestFilter;
+texture.generateMipmaps = false;
+skin.map = texture;
+const palette = await (await fetch('/palette.json')).json();
+const extraHead = new THREE.Group();
+const extraBody = new THREE.Group();
+skin.head.add(extraHead);
+skin.body.add(extraBody);
+
+function block(parent, size, position, colors) {
+  const materials = colors.map(c => new THREE.MeshStandardMaterial({color:palette[c]}));
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), materials);
+  mesh.position.set(...position);
+  parent.add(mesh);
+  return mesh;
+}
+
+// Six stepped ear cuboids, with pink on the front face, not floating decals.
+for (const sign of [-1, 1]) {
+  for (let tier = 0; tier < 3; tier++) {
+    const width = 3.6 - tier * 1.2;
+    const ear = block(extraHead, [width, 1.25, 1.5], [sign * (2.5 + tier * 0.4), 8.625 + tier * 1.25, 0.4],
+      ['hair','hair_shadow','hair_light','hair_shadow','hair','hair']);
+    if (tier < 2) {
+      const front = document.createElement('canvas');
+      front.width = tier === 0 ? 5 : 3;
+      front.height = 1;
+      const ctx = front.getContext('2d');
+      ctx.fillStyle = palette.hair;
+      ctx.fillRect(0, 0, front.width, 1);
+      ctx.fillStyle = palette.pink_light;
+      ctx.fillRect(1, 0, front.width - 2, 1);
+      const map = new THREE.CanvasTexture(front);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.magFilter = map.minFilter = THREE.NearestFilter;
+      map.generateMipmaps = false;
+      ear.material[4].color.set(0xffffff);
+      ear.material[4].map = map;
+    }
+  }
+}
+// Four connected blocks rooted at the waist. Coordinates are relative to the torso.
+const tail = [
+  [[2.5, 2.5, 3], [1, -4, -3.5]],
+  [[3.5, 3.5, 3], [3, -3, -5.3]],
+  [[4, 4, 3.5], [5.1, -0.4, -5.8]],
+  [[3.5, 3.5, 3], [6, 2.8, -5]],
+];
+for (const [size, position] of tail) {
+  block(extraBody, size, position,
+    ['hair','hair_shadow','hair_light','hair_shadow','hair','hair_light']);
+}
+
+window.renderSkin = ({width=380, height=480, angle=0, elevation=0, route='A', pose='stand', layers=true}={}) => {
+  renderer.setSize(width, height);
+  const span = 44;
+  const aspect = width / height;
+  camera.left = -span * aspect / 2;
+  camera.right = span * aspect / 2;
+  camera.top = span / 2;
+  camera.bottom = -span / 2;
+  camera.near = 0.1;
+  camera.far = 200;
+  camera.position.set(Math.sin(angle)*65, -7 + elevation, Math.cos(angle)*65);
+  camera.lookAt(0, -7, 0);
+  camera.updateProjectionMatrix();
+  skin.resetJoints();
+  skin.setOuterLayerVisible(layers);
+  extraHead.visible = extraBody.visible = route === 'B';
+  if (pose === 'walk') {
+    skin.leftLeg.rotation.x = 0.55;
+    skin.rightLeg.rotation.x = -0.55;
+    skin.leftArm.rotation.x = -0.5;
+    skin.rightArm.rotation.x = 0.5;
+    skin.head.rotation.y = 0.2;
+  } else if (pose === 'turn') {
+    skin.head.rotation.y = -0.7;
+    skin.head.rotation.x = 0.12;
+    skin.rightArm.rotation.x = -1.0;
+    skin.leftArm.rotation.z = -0.13;
+  }
+  renderer.render(scene, camera);
+  return {
+    model:skin.modelType,
+    extras:route === 'B' ? extraHead.children.length + extraBody.children.length : 0,
+    pose, layers, angle, elevation,
+    leftLegAngle:skin.leftLeg.rotation.x, rightLegAngle:skin.rightLeg.rotation.x,
+    headAngle:skin.head.rotation.y,
+  };
+};
+window.renderSkin();
+window.ready = true;
+</script>
+</html>

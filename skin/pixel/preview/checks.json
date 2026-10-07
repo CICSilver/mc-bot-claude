@@ -1,0 +1,311 @@
+{
+  "front": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 0,
+    "elevation": 0,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      111,
+      71,
+      269,
+      425
+    ],
+    "colors": 17
+  },
+  "back": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 3.141592653589793,
+    "elevation": 0,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      111,
+      71,
+      269,
+      425
+    ],
+    "colors": 10
+  },
+  "right": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": -1.5707963267948966,
+    "elevation": 0,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      146,
+      71,
+      239,
+      425
+    ],
+    "colors": 12
+  },
+  "left": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 1.5707963267948966,
+    "elevation": 0,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      141,
+      71,
+      234,
+      425
+    ],
+    "colors": 12
+  },
+  "front_three": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 0.55,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      110,
+      61,
+      270,
+      430
+    ],
+    "colors": 35
+  },
+  "back_three": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 3.691592653589793,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      110,
+      61,
+      270,
+      430
+    ],
+    "colors": 28
+  },
+  "small": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 0.4,
+    "elevation": 8,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      96,
+      128
+    ],
+    "bounds": [
+      26,
+      17,
+      70,
+      114
+    ],
+    "colors": 35
+  },
+  "walk_front": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "walk",
+    "layers": true,
+    "angle": 0.4,
+    "elevation": 10,
+    "leftLegAngle": 0.55,
+    "rightLegAngle": -0.55,
+    "headAngle": 0.2,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      108,
+      64,
+      272,
+      422
+    ],
+    "colors": 63
+  },
+  "walk_back": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "walk",
+    "layers": true,
+    "angle": 3.541592653589793,
+    "elevation": 10,
+    "leftLegAngle": 0.55,
+    "rightLegAngle": -0.55,
+    "headAngle": 0.2,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      108,
+      64,
+      272,
+      423
+    ],
+    "colors": 32
+  },
+  "turn": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "turn",
+    "layers": true,
+    "angle": 0.3,
+    "elevation": 8,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": -0.7,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      86,
+      58,
+      272,
+      428
+    ],
+    "colors": 52
+  },
+  "base_only": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": false,
+    "angle": 0.55,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      113,
+      67,
+      267,
+      430
+    ],
+    "colors": 28
+  },
+  "b_front": {
+    "model": "slim",
+    "extras": 10,
+    "pose": "stand",
+    "layers": true,
+    "angle": 0.55,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      110,
+      35,
+      299,
+      430
+    ],
+    "colors": 35
+  },
+  "b_back": {
+    "model": "slim",
+    "extras": 10,
+    "pose": "stand",
+    "layers": true,
+    "angle": 3.691592653589793,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      380,
+      480
+    ],
+    "bounds": [
+      81,
+      33,
+      270,
+      430
+    ],
+    "colors": 30
+  },
+  "mobile": {
+    "model": "slim",
+    "extras": 0,
+    "pose": "stand",
+    "layers": true,
+    "angle": 0.55,
+    "elevation": 14,
+    "leftLegAngle": 0,
+    "rightLegAngle": 0,
+    "headAngle": 0,
+    "size": [
+      320,
+      480
+    ],
+    "bounds": [
+      80,
+      61,
+      240,
+      430
+    ],
+    "colors": 35
+  },
+  "skin_sha256": "c2c7677b21e1aa3fedd0197d977b93c0bff1938ffc309f3a099913d8d1886503"
+}
