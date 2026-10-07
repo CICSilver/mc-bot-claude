@@ -114,7 +114,7 @@ function emit(kind, body, to = ROUTES[kind]) {
 	console.log(`${line}  → ${to.join("+")}`);
 	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
 	else remember(line.slice(6));   // 去掉日期，只留时:分
-	if (to.includes(FAST)) fastQueue = fastQueue.then(() => withSnapshot(line)).then(text => deliver(FAST, text));
+	if (to.includes(FAST)) fastQueue = fastQueue.then(() => withSnapshot(line)).then(text => deliver(FAST, text)).catch(e => console.log(`${ts()} 发给快速反应层失败：${e}`));
 	resetIdle();
 }
 
