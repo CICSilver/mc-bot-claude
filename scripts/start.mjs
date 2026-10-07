@@ -38,7 +38,11 @@ await fetch("http://127.0.0.1:25599/shutdown").then(() => new Promise(r => setTi
 
 // 小克的耳朵：单独的进程组，这样在小克窗口里按 Ctrl+C 不会把它一起关掉
 const earLog = openSync("logs/ear.log", "a");
-const ear = spawn(process.execPath, ["scripts/ear-server.mjs"], { stdio: ["ignore", earLog, earLog], detached: true, windowsHide: true });
+// 大肥鱼（Moby，../mc-bot-deepseek）是同一个服务器上的 AI 同伴：不算访客，它说的话只在有真人在线时才转发
+const ear = spawn(process.execPath, ["scripts/ear-server.mjs"], {
+	stdio: ["ignore", earLog, earLog], detached: true, windowsHide: true,
+	env: { ...process.env, MC_COMPANIONS: "Moby" },
+});
 
 // 从桌面应用的终端里启动时会带上它的会话变量，独立运行的 claude 会因此登录失败
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>

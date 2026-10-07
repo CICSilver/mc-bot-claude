@@ -13,7 +13,11 @@
       ],
       "env": {
         "XIAOKE_LOGOUT_FLAG": "E:/WorkFiles/workSpace/github_repos/mc-bot-instruction/logs/logout.flag",
-        "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5"
+        "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
+        "XIAOKE_EAR_URL": "http://127.0.0.1:25599",
+        "XIAOKE_RELATIONSHIPS": "E:/WorkFiles/workSpace/github_repos/mc-bot-instruction/state/relationships.json",
+        "XIAOKE_ALIASES": "admin=CICSilver",
+        "XIAOKE_COMPANIONS": "Moby"
       }
     }
   }
