@@ -5,10 +5,10 @@ import { existsSync, mkdirSync, openSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// 想换模型就设环境变量 XIAOKE_MODEL：sonnet 响应快、用量省；opus 更聪明但更慢更贵
-const MODEL = process.env.XIAOKE_MODEL ?? "sonnet";
-// 思考强度：不设就是默认的 medium；设成 low 回话更快，但想事情会更简单
-const EFFORT = process.env.XIAOKE_EFFORT;
+// 想换模型就设环境变量 XIAOKE_MODEL：默认 Opus 5.5，更聪明；sonnet 回话更快、用量大约省一半
+const MODEL = process.env.XIAOKE_MODEL || "claude-opus-5-5";
+// 思考强度：low / medium / high。high 想得更周到，但每次回话要多等一会儿
+const EFFORT = process.env.XIAOKE_EFFORT || "medium";
 
 process.chdir(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -47,7 +47,7 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
 const now = new Date().toLocaleString("zh-CN", { hour12: false });
 const args = [
 	"--model", MODEL,
-	...(EFFORT ? ["--effort", EFFORT] : []),
+	"--effort", EFFORT,
 	"--system-prompt-file", "prompts/system.md",   // 用小克的设定完全替换 Claude Code 原有的系统提示词
 	"--mcp-config", "config/xiaoke-mcp.json",       // 不叫 .mcp.json，免得在本目录开的普通会话也用 clawd 登录把小克挤下线
 	"--strict-mcp-config",                          // 只加载 Minecraft 这一个 MCP，账号里的其它连接器一律不给

@@ -35,7 +35,7 @@ Claude Code 本来是你说一句、它回一句。这里加了一个“耳朵�
 | `config/xiaoke-mcp.json` | Minecraft MCP 的配置（登录名 clawd）。故意不叫 `.mcp.json`：那样在本目录开普通会话时也会用 clawd 登录，把正在运行的小克挤下线 |
 | `config/xiaoke-settings.json` | 小克的权限：只允许游戏工具、Monitor、读写 memory，其它全部拒绝。启动器通过 `--settings` 传给她 |
 | `scripts/ear-server.mjs` | 小克的耳朵 |
-| `scripts/start.mjs` | 真正的启动器：找 claude、开耳朵、带上所有参数启动小克、退出时关耳朵。换模型设环境变量 `XIAOKE_MODEL`（默认 sonnet） |
+| `scripts/start.mjs` | 真正的启动器：找 claude、开耳朵、带上所有参数启动小克、退出时关耳朵。换模型设环境变量 `XIAOKE_MODEL`（默认 Opus 5.5） |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
 
 Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
@@ -78,7 +78,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`，改过的代码在�
 
 - 改人设或规则：编辑 `prompts/system.md`，下次启动生效
 - 改空闲唤醒间隔：启动前设置环境变量 `IDLE_MIN_SECONDS` / `IDLE_MAX_SECONDS`（默认每次在 120～300 秒之间随机）
-- 换模型或思考强度：启动前设置 `XIAOKE_MODEL`（默认 sonnet）、`XIAOKE_EFFORT`（不设就是 medium；low 回话更快但想得更简单）。比如在 cmd 里 `set XIAOKE_EFFORT=low` 再运行启动脚本
+- 换模型或思考强度：启动前设置 `XIAOKE_MODEL`（默认 `claude-opus-5-5`；设成 `sonnet` 回话更快，用量大约省一半）、`XIAOKE_EFFORT`（默认 medium；high 想得更周到但回话更慢，low 更快但想得更简单）。比如在 cmd 里 `set XIAOKE_EFFORT=high` 再运行启动脚本
 - 游戏里的昵称前缀 `[小克]` 是服务器上的队伍 `xiaoke`，用管理员命令 `/team modify xiaoke prefix ...` 修改
 
 ## 注意
