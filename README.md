@@ -4,11 +4,11 @@
 
 > **这个分支（`claude/dual-mind`）是测试版小克**，跟正式的小克分开，可以同时在线：
 > - 登录名 `clawd_test`，耳朵端口 25612、身体端口 25613（正式版是 clawd、25599、25598）
-> - 记忆和好感度在 `test-home/`（不进 git）。每次新开都清空，从 `memory-blank/` 的空白记忆重新开始；`--continue` 接着上次的对话时不清
+> - 记忆和好感度在 `test-home/`（不进 git），跟正式版分开、一直接着用。第一次启动时从 `memory-blank/` 的空白记忆开始；想让测试版从头来过，删掉 `test-home/memory` 和 `test-home/state` 再启动
 > - 皮肤和 clawd 是同一套：服务器 `world/skinrestorer/` 里把 clawd 的那份复制给了 clawd_test 的 UUID（`bbb85730-…`）
 > - 服务器数据包的 `/trigger xiaoke_*`（安家、传送回家、应急口粮、召唤、下线）只认 clawd，测试版用不了；队伍前缀 `[小克]` 也没有
 > - 正式的小克 clawd 在测试版眼里是 AI 同伴（跟大肥鱼一样，不算访客，限频转发）；反过来正式版那边会把 clawd_test 当成访客
-> - 这些都在 `config/xiaoke-body.json` 里，合回正式版时改回 clawd、25599/25598、`"home": "."`、去掉 `freshMemory`
+> - 这些都在 `config/xiaoke-body.json` 里，合回正式版时改回 clawd、25599/25598、`"home": "."`、去掉 `datapackTriggers`
 
 ## 怎么启动
 
@@ -92,8 +92,8 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `prompts/fast.md`、`prompts/mind.md` | 快速反应层、思维层各自的规则：管什么、收到哪些事件、怎么配合、醒来时做什么。启动器把 `persona.md` 和这一层的拼成 `logs/prompt-*.md`（里面的 `{{LOGIN}}`、`{{EAR}}` 换成登录名和耳朵地址），**完全替换** Claude Code 原有的系统提示词 |
 | `memory/` | 小克自己的记忆（在 `home` 里），思维层读写、快速反应层只读：`self.md` 自己和心愿、`people.md` 对访客的印象、`world.md` 地点坐标、`goals.md` 打算、`journal/` 每天的日记 |
 | `state/relationships.json` | 好感度（在 `home` 里），由 MCP 读写。小克的权限碰不到这个文件 |
-| `config/xiaoke-body.json` | 小克这个人和身体的配置：MCP 在哪（`mcp`，相对本目录）、服务器（`host`、`port`）、登录名（`username`）、数据包消息里怎么称呼她（`nick`，测试版是“小克test”，免得把发给正式小克的召唤、下线当成自己的）、耳朵和身体的端口（`earPort`、`bodyPort`）、记忆放在哪（`home`）、每次新开要不要清空记忆（`freshMemory`，只对单独的 home 目录生效），以及给身体的环境变量（访客小屋禁挖区、小号对应关系、AI 同伴）。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用这个名字登录，把正在运行的小克挤下线 |
-| `memory-blank/` | 空白记忆模板，`freshMemory` 时每次新开都拿它重置 `home` 里的 `memory/`（`{{LOGIN}}` 换成登录名） |
+| `config/xiaoke-body.json` | 小克这个人和身体的配置：MCP 在哪（`mcp`，相对本目录）、服务器（`host`、`port`）、登录名（`username`）、数据包消息里怎么称呼她（`nick`，测试版是“小克test”，免得把发给正式小克的召唤、下线当成自己的）、耳朵和身体的端口（`earPort`、`bodyPort`）、记忆放在哪（`home`）、服务器的 /trigger 认不认这个登录名（`datapackTriggers`，测试版是 false），以及给身体的环境变量（访客小屋禁挖区、小号对应关系、AI 同伴）。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用这个名字登录，把正在运行的小克挤下线 |
+| `memory-blank/` | 空白记忆模板：`home` 里还没有 `memory/` 时（第一次用），启动器拿它铺一份（`{{LOGIN}}` 换成登录名）；已经有了就不动 |
 | `config/xiaoke-fast-settings.json`、`config/xiaoke-mind-settings.json` | 两层的权限：都只允许游戏工具、Monitor 和读 memory，思维层另外能写 memory，其它全部拒绝。启动器复制到 `logs/settings-*.json`（思维层另加通知身体的 hook）再通过 `--settings` 传进去 |
 | `prompts/no-triggers.md` | 测试版说明：`/trigger xiaoke_*` 用不了，安家只记坐标。`config/xiaoke-body.json` 里 `datapackTriggers` 是 false 时，启动器把它接在人设后面 |
 | `scripts/ear-server.mjs` | 小克的耳朵 |

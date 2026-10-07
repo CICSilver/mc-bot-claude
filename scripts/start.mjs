@@ -72,21 +72,16 @@ const HOME = resolve(process.env.XIAOKE_HOME || CONFIG.home || ".");
 mkdirSync("logs", { recursive: true });
 mkdirSync(HOME, { recursive: true });
 
-// freshMemory：每次新开（不是 --continue）都从空白记忆开始，测试用。
-// 只在 home 是单独的目录时才清，免得把正式的记忆（本目录的 memory/）清掉
-function resetMemory() {
-	if (resolve(HOME) === resolve(ROOT)) {
-		console.log("freshMemory 只用在单独的 home 目录上，这次没有清记忆。");
-		return;
-	}
-	rmSync(join(HOME, "memory"), { recursive: true, force: true });
-	rmSync(join(HOME, "state"), { recursive: true, force: true });
+// home 里还没有记忆（第一次用这个 home，比如测试版的 test-home）：从 memory-blank 的空白记忆开始。
+// 已经有了就接着用，不会清掉；想让测试版从头来过，删掉 home 里的 memory 和 state 两个文件夹再启动
+function seedMemory() {
+	if (existsSync(join(HOME, "memory"))) return;
 	cpSync("memory-blank", join(HOME, "memory"), { recursive: true });
 	for (const name of readdirSync(join(HOME, "memory"))) {
 		const file = join(HOME, "memory", name);
 		if (name.endsWith(".md")) writeFileSync(file, fill(readFileSync(file, "utf8")));
 	}
-	console.log(`记忆和好感度已清空，从 memory-blank 重新开始（${HOME}）。`);
+	console.log(`第一次用 ${HOME}，从 memory-blank 的空白记忆开始。`);
 }
 
 // 提示词和空白记忆里的 {{LOGIN}}、{{EAR}} 换成这一次的登录名和耳朵地址
@@ -162,7 +157,7 @@ if (layer === "mind") {
 		console.error(`找不到 ${mcpMain}，先在 ${resolve(CONFIG.mcp)} 里运行 npm install 和 npm run build。`);
 		process.exit(1);
 	}
-	if (CONFIG.freshMemory && !resume) resetMemory();
+	seedMemory();
 
 	// 上次如果是直接点 X 关的窗口，旧的耳朵可能还占着端口，先请它退出（旧的身体看到旧启动器不在了会自己下线）
 	await fetch(`http://127.0.0.1:${EAR_PORT}/shutdown`).then(() => sleep(500), () => {});
