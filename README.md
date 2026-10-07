@@ -58,7 +58,7 @@ Claude Code 本来是你说一句、它回一句。这里加了一个“耳朵�
 | `scripts/start.mjs` | 真正的启动器：找 claude、开耳朵、带上所有参数启动小克、退出时关耳朵。换模型设环境变量 `XIAOKE_MODEL`（默认 Opus 5.5） |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
 
-Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
+Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
 
 - mineflayer 升到 4.39.0 以支持 26.1，去掉了进服时自动发的英文消息
 - 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、`attack-entity` 打猎自卫、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
