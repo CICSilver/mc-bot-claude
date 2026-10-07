@@ -3,7 +3,7 @@
     "minecraft": {
       "command": "node",
       "args": [
-        "D:/workspace/mc-bot/minecraft-mcp-server-xiaoke/dist/main.js",
+        "../minecraft-mcp-server-xiaoke/dist/main.js",
         "--host",
         "mc.lemalin.icu",
         "--port",
@@ -12,10 +12,10 @@
         "clawd"
       ],
       "env": {
-        "XIAOKE_LOGOUT_FLAG": "D:/workspace/mc-bot/mc-bot-claude/logs/logout.flag",
+        "XIAOKE_LOGOUT_FLAG": "./logs/logout.flag",
         "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
         "XIAOKE_EAR_URL": "http://127.0.0.1:25599",
-        "XIAOKE_RELATIONSHIPS": "D:/workspace/mc-bot/mc-bot-claude/state/relationships.json",
+        "XIAOKE_RELATIONSHIPS": "./state/relationships.json",
         "XIAOKE_ALIASES": "admin=CICSilver",
         "XIAOKE_COMPANIONS": "Moby"
       }

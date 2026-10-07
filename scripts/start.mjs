@@ -1,8 +1,8 @@
 // 小克的启动器：找到 claude、在后台开耳朵、用小克的设定启动 Claude Code，退出时把耳朵关掉
 // 用法：node scripts/start.mjs [额外的 claude 参数，比如 --continue 接着上次的对话]
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readdirSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // 想换模型就设环境变量 XIAOKE_MODEL：默认 Opus 5.5，更聪明；sonnet 回话更快、用量大约省一半
@@ -34,6 +34,16 @@ if (!claudeExe) {
 
 // 上次如果是直接点 X 关的窗口，启动器来不及收尾，旧的耳朵（可能还是旧代码）会一直占着端口，先请它退出
 mkdirSync("logs", { recursive: true });
+
+// config/xiaoke-mcp.json 里写的是相对本目录的路径（./ 或 ../ 开头），换台电脑也能用；
+// 启动前换成这台电脑上的绝对路径，存到 logs/xiaoke-mcp.json 再交给 claude
+const mcpConfig = JSON.parse(readFileSync("config/xiaoke-mcp.json", "utf8"));
+const absolute = value => typeof value === "string" && /^\.\.?\//.test(value) ? resolve(value) : value;
+for (const server of Object.values(mcpConfig.mcpServers)) {
+	server.args = server.args?.map(absolute);
+	for (const key of Object.keys(server.env ?? {})) server.env[key] = absolute(server.env[key]);
+}
+writeFileSync("logs/xiaoke-mcp.json", JSON.stringify(mcpConfig, null, 2));
 await fetch("http://127.0.0.1:25599/shutdown").then(() => new Promise(r => setTimeout(r, 500)), () => {});
 
 // 小克的耳朵：单独的进程组，这样在小克窗口里按 Ctrl+C 不会把它一起关掉
@@ -53,7 +63,7 @@ const args = [
 	"--model", MODEL,
 	"--effort", EFFORT,
 	"--system-prompt-file", "prompts/system.md",   // 用小克的设定完全替换 Claude Code 原有的系统提示词
-	"--mcp-config", "config/xiaoke-mcp.json",       // 不叫 .mcp.json，免得在本目录开的普通会话也用 clawd 登录把小克挤下线
+	"--mcp-config", "logs/xiaoke-mcp.json",         // 由 config/xiaoke-mcp.json 生成（见上面）。不叫 .mcp.json，免得在本目录开的普通会话也用 clawd 登录把小克挤下线
 	"--strict-mcp-config",                          // 只加载 Minecraft 这一个 MCP，账号里的其它连接器一律不给
 	"--setting-sources", "project",                 // 不读用户级的全局设置
 	"--settings", "config/xiaoke-settings.json",    // 小克的权限只在这里给，不影响在本目录开的普通会话
