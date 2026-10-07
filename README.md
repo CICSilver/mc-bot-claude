@@ -67,7 +67,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 - 思维层的 `read-chat` 只看得到“系统”回复（/trigger 的结果），访客的话一律由快速反应层回
 
 事件分给谁：
-- 快速反应层：[聊天]、[进服]、[离开]、[死亡]、[成就]、[礼物]、[注视]、[召唤]、[琢磨]、[闲聊]（后两个没人在听就丢掉，不攒着）
+- 快速反应层：[聊天]、[进服]、[离开]、[死亡]、[成就]、[礼物]、[注视]、[召唤]、[互动]、[看见]、[游戏]、[琢磨]、[闲聊]（后两个没人在听就丢掉，不攒着）
 - 思维层：[记下]、[进展]、[提醒]、[空闲]、[回顾]、[天气]、[下线]、[独处]
 - 两层都给：[危险]、[断线]、小克自己的 [死亡]
 
@@ -80,6 +80,13 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 - 有人扔东西给她，身体认出来后发 [礼物]
 - “本能”（`src/senses.ts`）：下雨、雨停发 [天气]；有人一直盯着她看三四秒发 [注视]；怪物靠近 7 格内她会先自己吓得跑开，再发 [危险]；手上没在干活时会自动转头看身边的人（走路、挖东西、盖房时头要对着干活的方向，转不了）；有人走到身边时蹲两下打招呼，闲着待在人旁边时隔 8～25 秒蹲一下，东张西望（look-around）时蹲下瞅一瞅；`crouch` 工具让她自己蹲
 - 没有别的玩家在线满 30 分钟，耳朵发一次 [独处]，思维层收尾下线
+
+让别人看见、听见她（活人感，第一批，见下面“表情和留下的痕迹”）：
+- 头顶的气泡：自言自语用 `murmur`，字在她头顶飘几秒，走近（约 16 格内）才看得清，不进聊天框；思维层深想时头顶一直冒着“……”。耳朵会把她冒过的泡记进窗口日志（`[嘀咕]`）和思维层的“这段时间嘴巴那边”
+- 表情：`emote`（或者 `send-chat` 带 `emote`）让身体做动作、在她的位置放猫叫、头顶冒粒子，比如点头、摇头、挥手、蹦蹦、冒爱心、炸毛、委屈、呼噜、讨吃的
+- 被碰到（[互动]）：有人冲她蹲几下，她蹲回去；有人蹲在跟前凑近看她的脑袋，算摸头，她呼噜一声冒爱心；远远冲她挥手，她挥回去；被打、被雪球砸，几秒内合成一条，写清楚是谁、拿什么、掉了多少血（伤害来源是服务器给的，摸头和挥手是从姿势猜的）
+- 注意到的事（[看见]）：她亲手放下的方块身体都记着（`state/belongings.json`），有人挖掉、踩坏她的田、打开她的箱子、杀她圈里的动物，或者她回到家附近发现东西不见了，都会知道；身边的人受伤快不行了、拿着鱼凑在旁边、走进她家，也会知道。看见是谁挖的写“亲眼看见是 TA”，只是离得近写“离得最近的是 TA”
+- 〔现在〕里近处的人后面会写手里拿着什么、血少不少、是不是蹲着
 - Monitor 每 30 分钟到期一次，到期时两层都会自己重新连上
 - 身体和耳朵都盯着启动器：直接点 X 关了窗口，身体会让机器人下线再退出，耳朵也跟着退出。启动器每次启动前也会先请旧耳朵退出
 - 日志：耳朵在 `logs/ear.log`，身体在 `logs/body.log`
@@ -96,7 +103,9 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `memory-blank/` | 空白记忆模板：`home` 里还没有 `memory/` 时（第一次用），启动器拿它铺一份（`{{LOGIN}}` 换成登录名）；已经有了就不动 |
 | `config/xiaoke-fast-settings.json`、`config/xiaoke-mind-settings.json` | 两层的权限：都只允许游戏工具、Monitor 和读 memory，思维层另外能写 memory，其它全部拒绝。启动器复制到 `logs/settings-*.json`（思维层另加通知身体的 hook）再通过 `--settings` 传进去 |
 | `prompts/no-triggers.md` | 测试版说明：`/trigger xiaoke_*` 用不了，安家只记坐标。`config/xiaoke-body.json` 里 `datapackTriggers` 是 false 时，启动器把它接在人设后面 |
-| `scripts/ear-server.mjs` | 小克的耳朵 |
+| `scripts/ear-server.mjs` | 小克的耳朵；也是她跟服务器控制台之间的线，身体要冒气泡、喵一声时找它 |
+| `scripts/world-fx.mjs` | 把气泡、声音、粒子变成调用数据包 `xiaoke_fx` 的控制台命令，只认固定的几种，文字先过滤（`node --test scripts/world-fx.test.mjs`） |
+| `server/datapacks/xiaoke_fx` | 服务器上的数据包源文件（装在服务器 `world/datapacks/xiaoke_fx`）：气泡是一个 text_display，每 tick 挪到主人头顶、到时间收掉，主人下线也收掉；声音和粒子在主人身上放。几个 AI 玩家可以同时用 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开思维层的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
 | `scripts/measure.mjs` | 体检：从会话记录里算出她多久回话、正忙时回话要多久、每次想了多少、长活顺不顺，单层和两层的会话可以放一起比（`--list` 列出所有小克会话）。怎么测见 [测试方案.md](测试方案.md) |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
@@ -129,6 +138,11 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 视距只要 4 个区块（`XIAOKE_VIEW_DISTANCE` 可改）：服务器出口只有约 5 Mbps，按服务器视距 10 推区块会把带宽占满好几秒，真人玩家会卡住。实测视距 4 进服 1.3 MB（原来 4.5 MB），身边 80 格内仍然都是加载好的
 - 挑工具（`src/tool-choice.ts`）：换掉了 mineflayer-pathfinder 的 `bestHarvestTool`（没有比空手快的工具时它会随手拿背包第一件东西，于是拿镐挖土），并包住 `bot.dig`：所有挖掘都先换上真正更快的工具，用不上工具时不拿会磨损的东西，草和花不换工具；换装备排队进行；工具坏了、快坏了会写进 [进展] 和 `dig-block` 的回复，`list-inventory` 显示每件还能用几次
 - 盔甲（`src/armor.ts`）：背包里有更好的盔甲就自动穿上（皮 < 铜 < 金 < 锁链 < 铁 < 钻石 < 下界合金），干后台长活时等闲下来再换；`get-status` 显示身上穿着什么
+- 表情（`src/expressions.ts`、`src/tools/expression-tools.ts`）：`emote` 18 种表情（身体动作 + 猫叫 + 粒子，干活、坐船时只转头）；`murmur` 头顶的气泡；`send-chat` 可以带 `emote`；深想时的“……”气泡（`idle.ts` 开关）。声音和粒子、气泡通过 `ear-link.ts` 的 `worldEffect` 交给耳朵。表情和 `crouch` 结束时只还原自己动过的（本来蹲着就还蹲着），坐在船里不蹲（一蹲就下船了）
+- 被碰到（`src/touch.ts`）：冲她蹲、摸头、挥手、戳、打、雪球砸（`damage_event` 里的来源），身边人血少、拿着鱼。AI 同伴只算打她
+- 她的东西（`src/belongings.ts`）：记住她放下的方块（mineflayer 的 `blockPlaced`，门和床的另一半，锄地播种），别人挖掉、踩田、开箱子、杀圈里的动物、回来发现不见了、有访客走进她家；她自己挖的、庄稼长大、没种东西的田变回泥土不算。`claim-home` 把这个功能之前盖的东西认作她的
+- 留下痕迹（`src/tools/trace-tools.ts`）：`put-sign` 立告示牌或改写自己的牌子；`write-book` 写书（填 title 就署名）；`read-book` 读背包里或讲台上的书；`name-item` 在铁砧给东西起名（命名牌）；`look-around` 会念出附近告示牌上的字
+- 一起玩（`src/games.ts`、`src/play.ts`、`src/tools/play-tools.ts`）：`ride` / `get-off` 跟人坐同一条船、矿车、骆驼；`throw-at` 扔雪球鸡蛋（会算抛物线）；`use-item` 吹山羊角、看望远镜；`hide-and-seek` 捉迷藏（她找时背身数数、只有真看见才算找到；她藏时找一个对方看不见的地方蹲好）、`stop-game`；`play-note-blocks` 按简谱自己调音再弹音符盒。玩游戏、坐船时用别的动身体的工具会先结束游戏、下船
 
 改完要在那个目录里 `npm run build` 才生效。
 
@@ -144,6 +158,8 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 屋顶正中间 (0, 136, 0) 开了个天窗：游戏会把出生的人放在重生点那一列最高的方块上，有屋顶的话大家会出生在屋顶上
 - 改了数据包后执行 `reload`，还要再执行一次 `function safezone:load`（这个版本 reload 不会自动跑初始化，不跑的话每秒清怪和各种 trigger 会停）
 - 服务器的出生点保护已经关掉（`spawn-protection=0`），不然非管理员在出生点附近挖不了东西
+- 数据包 `world/datapacks/xiaoke_fx`：气泡、猫叫、粒子（源文件在本仓库 `server/datapacks/xiaoke_fx`）。耳朵通过 ssh 把 `function xiaoke_fx:...` 写进控制台（`/run/minecraft.stdin`）
+- `server.properties` 里 `broadcast-console-to-ops=false`（10-07 改的，原来的备份在 `server.properties.bak-20261007-xiaoke-fx`）：不然控制台每执行一条命令，在线的管理员（admin）聊天里都会冒一行“[Server: Running function ...]”。耳朵启动时会检查这一项、数据包在不在、改完有没有重启，不满足就先不发效果（日志里写原因）；`XIAOKE_FX=off` 关掉，`XIAOKE_FX=on` 不检查直接开
 
 ## 邻居大肥鱼（第二个 AI 玩家）
 

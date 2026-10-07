@@ -181,6 +181,8 @@ if (layer === "mind") {
 			XIAOKE_EAR_URL: `http://127.0.0.1:${EAR_PORT}`,
 			XIAOKE_LOGOUT_FLAG: LOGOUT_FLAG,
 			XIAOKE_RELATIONSHIPS: join(HOME, "state", "relationships.json"),
+			// 她亲手放下的方块（房子、田、箱子……），有人动了她能注意到
+			XIAOKE_BELONGINGS: join(HOME, "state", "belongings.json"),
 		},
 	});
 

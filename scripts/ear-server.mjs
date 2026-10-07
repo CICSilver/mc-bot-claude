@@ -3,11 +3,13 @@
 // 小克的脑子分成一快一慢两层（见 scripts/start.mjs），各连一个地址，耳朵按事件类型分给它们：
 // - ws://127.0.0.1:25599/fast  快速反应层：聊天、进出、礼物、注视……来了马上接话。后面附上〔现在〕（问身体要的一行状况）
 // - ws://127.0.0.1:25599/mind  思维层：长活结束、提醒、空闲、天气、[记下]、下线……慢慢想。后面附上这段时间快速反应层那边发生的事
+// 耳朵也是她跟服务器控制台之间的一根线：身体想冒气泡、喵一声、冒爱心时 POST /effect，耳朵换成调用数据包 xiaoke_fx 的命令（world-fx.mjs）
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createInterface } from "node:readline";
+import { renderEffect, cleanText } from "./world-fx.mjs";
 
 const SERVER = process.env.MC_SERVER ?? "root@121.4.126.91";
 const SELF = process.env.MC_BOT_NAME ?? "clawd";
@@ -31,6 +33,8 @@ const ALONE_MS = Number(process.env.ALONE_LOGOUT_MINUTES ?? 30) * 60 * 1000;
 // 启动器的进程号：它没了（窗口被直接关掉），耳朵也退出
 const PARENT_PID = Number(process.env.EAR_PARENT_PID) || 0;
 const SSH = process.env.SSH_BIN ?? "ssh";
+// 服务器上 MC 的目录（检查数据包和 server.properties 用）
+const SERVER_DIR = process.env.MC_SERVER_DIR ?? "/opt/minecraft/server";
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"];
 
 // 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd”
@@ -51,6 +55,8 @@ const ROUTES = {
 	危险: [FAST, MIND], 断线: [FAST, MIND],
 	// 身体看到的：思维层在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
 	琢磨: [FAST], 闲聊: [FAST],
+	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
+	互动: [FAST], 看见: [FAST], 游戏: [FAST],
 	进展: [MIND], 提醒: [MIND], 空闲: [MIND], 天气: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
 };
 
@@ -254,7 +260,7 @@ function handleFrame(socket, buf) {
 // 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给思维层的事（记下）、开始 / 结束忙
 function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "琢磨", "闲聊"].includes(data.kind) && typeof data.text === "string") {
+	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
@@ -266,6 +272,20 @@ const LOCAL_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const http = createServer((req, res) => {
 	// 新的启动器启动前会来请旧的耳朵退出
 	if (req.url === "/shutdown") { res.end("bye\n"); setTimeout(() => process.exit(0), 100); return; }
+	if (req.method === "POST" && req.url === "/effect") {
+		if (!LOCAL_HOSTS.has(req.headers.host ?? "") || !(req.headers["content-type"] ?? "").startsWith("application/json")) {
+			res.writeHead(403); res.end("forbidden\n"); return;
+		}
+		let body = "";
+		req.setEncoding("utf8");
+		req.on("data", chunk => { if (body.length < 4096) body += chunk; });
+		req.on("end", () => {
+			let ok = false;
+			try { ok = worldEffect(JSON.parse(body || "{}")); } catch { /* 坏的就不发 */ }
+			res.writeHead(ok ? 200 : 409); res.end(ok ? "ok\n" : "not sent\n");
+		});
+		return;
+	}
 	if (req.method === "POST" && (req.url === "/event" || req.url === "/busy")) {
 		// 只收本机身体发来的 JSON：网页能悄悄发 text/plain 表单，也能借 DNS 重绑定换个 Host 摸过来，往小克脑子里塞假事件
 		if (!LOCAL_HOSTS.has(req.headers.host ?? "") || !(req.headers["content-type"] ?? "").startsWith("application/json")) {
@@ -308,8 +328,67 @@ http.listen(PORT, "127.0.0.1", () => {
 	writeFileSync("logs/ear.pid", String(process.pid));
 	console.log(`${ts()} ${NICK}（${SELF}）的耳朵在 ws://127.0.0.1:${PORT}/fast 和 /mind 等着${COMPANIONS.size ? `，AI 同伴：${[...COMPANIONS].join(" ")}` : ""}`);
 	follow();
+	checkWorldFx();
 });
-process.on("exit", () => journal?.kill());
+process.on("exit", () => { journal?.kill(); consoleWriter?.kill(); });
+
+// ---- 让别人看见、听见她：气泡、猫叫、粒子 ----
+// 通过一根一直开着的 ssh 把命令写进服务器控制台（/run/minecraft.stdin）。
+// 控制台执行的命令默认会以“[Server: ...]”的样子发给在线的管理员，所以要先在 server.properties 里设 broadcast-console-to-ops=false 并重启服务器；
+// 启动时检查这一点和数据包 xiaoke_fx 在不在，不满足就不发（XIAOKE_FX=on 强制打开，XIAOKE_FX=off 关掉）
+let fxEnabled = false;
+let consoleWriter = null;
+const fxTimes = [];   // 最近一分钟发过的效果，限流用
+
+function checkWorldFx() {
+	if (process.env.XIAOKE_FX === "off") { console.log(`${ts()} 气泡、声音、粒子关着（XIAOKE_FX=off）`); return; }
+	if (process.env.XIAOKE_FX === "on") { fxEnabled = true; console.log(`${ts()} 气泡、声音、粒子开着（XIAOKE_FX=on，没检查服务器）`); return; }
+	// server.properties 改了以后要重启过才算数。服务器启动时自己会把它重写一遍，所以启动后两分钟内写的也算
+	const check = [
+		`cd ${SERVER_DIR}`,
+		`grep -q '^broadcast-console-to-ops=false' server.properties || { echo props; exit; }`,
+		`test -f world/datapacks/xiaoke_fx/pack.mcmeta || { echo pack; exit; }`,
+		`pid=$(systemctl show -p MainPID --value minecraft)`,
+		`[ "$(stat -c %Y server.properties)" -lt "$(( $(date -d "$(ps -o lstart= -p $pid)" +%s) + 120 ))" ] || { echo restart; exit; }`,
+		`echo ok`,
+	].join("; ");
+	let out = "";
+	const p = ssh(check);
+	p.stdout.on("data", d => (out += d));
+	p.on("close", () => {
+		const why = { props: "server.properties 里还没有 broadcast-console-to-ops=false（不然管理员会在聊天里看到一串 [Server: ...]）", pack: "服务器上还没装数据包 xiaoke_fx", restart: "改了 server.properties 以后服务器还没重启" }[out.trim()];
+		fxEnabled = out.trim() === "ok";
+		console.log(`${ts()} ${fxEnabled ? "气泡、声音、粒子开着" : `气泡、声音、粒子先关着：${why ?? `检查不了服务器（${out.trim() || "ssh 没有输出"}）`}`}`);
+	});
+}
+
+function writeConsole(line) {
+	if (!consoleWriter) {
+		consoleWriter = spawn(SSH, [...SSH_OPTS, SERVER, "cat > /run/minecraft.stdin"], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+		consoleWriter.on("close", () => { consoleWriter = null; });
+		consoleWriter.stdin.on("error", () => { consoleWriter = null; });
+	}
+	consoleWriter.stdin.write(`${line}\n`);
+}
+
+function worldEffect(effect) {
+	if (!fxEnabled) return false;
+	const now = Date.now();
+	while (fxTimes.length && now - fxTimes[0] > 60000) fxTimes.shift();
+	// 一秒最多 6 个、一分钟最多 120 个，免得刷爆控制台
+	if (fxTimes.length >= 120 || fxTimes.filter(t => now - t < 1000).length >= 6) return false;
+	const line = renderEffect(effect, SELF);
+	if (!line) return false;
+	fxTimes.push(now);
+	writeConsole(line);
+	// 她自己嘀咕的话也是她的一部分：记进窗口日志，思维层回顾时也能看到
+	if (effect.kind === "bubble" && effect.style === "murmur") {
+		const text = cleanText(effect.text);
+		console.log(`${ts()} [嘀咕] ${text}`);
+		remember(`${ts().slice(6)} 你头顶冒泡嘀咕: ${text}`);
+	}
+	return true;
+}
 
 // 快速反应层那边一直在跟人打交道，思维层好一阵没被叫醒：叫它回顾一下，看看有没有要记下、要改打算的
 setInterval(() => {
