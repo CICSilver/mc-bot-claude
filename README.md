@@ -52,13 +52,13 @@ Claude Code 本来是你说一句、它回一句。这里加了一个“耳朵�
 | `prompts/system.md` | 小克的全部设定：人设 + 在这个世界里的生活规则。启动时用它**完全替换** Claude Code 原有的系统提示词 |
 | `memory/` | 小克自己的记忆，她会自己读写：`self.md` 自己和心愿、`people.md` 对访客的印象、`world.md` 地点坐标、`goals.md` 打算、`journal/` 每天的日记 |
 | `state/relationships.json` | 好感度，由 MCP 读写。小克的权限碰不到这个文件 |
-| `config/xiaoke-mcp.json` | Minecraft MCP 的配置（登录名 clawd、耳朵地址、好感度文件、小号对应关系）。故意不叫 `.mcp.json`：那样在本目录开普通会话时也会用 clawd 登录，把正在运行的小克挤下线 |
+| `config/xiaoke-mcp.json` | Minecraft MCP 的配置（登录名 clawd、耳朵地址、好感度文件、小号对应关系）。故意不叫 `.mcp.json`：那样在本目录开普通会话时也会用 clawd 登录，把正在运行的小克挤下线。里面的路径相对本目录写（`./`、`../` 开头），启动器会换成这台电脑上的绝对路径存到 `logs/xiaoke-mcp.json` 再交给 claude，所以换电脑不用改，只要三个目录挨在一起 |
 | `config/xiaoke-settings.json` | 小克的权限：只允许游戏工具、Monitor、读写 memory，其它全部拒绝。启动器通过 `--settings` 传给她 |
 | `scripts/ear-server.mjs` | 小克的耳朵 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开耳朵、带上所有参数启动小克、退出时关耳朵。换模型设环境变量 `XIAOKE_MODEL`（默认 Opus 5.5） |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
 
-Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
+Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
 
 - mineflayer 升到 4.39.0 以支持 26.1，去掉了进服时自动发的英文消息
 - 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、`attack-entity` 打猎自卫、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
@@ -76,6 +76,9 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server`，改过的代码在�
 - 寻路不会挖穿木板、圆石、玻璃、栅栏、门、楼梯、半砖、箱子、床、农田、庄稼等玩家造的东西（包括她自己盖的房子）；平时不垫方块往上爬，只有 `dig-path-to` 才会（`src/movement-utils.ts`）
 - 访客小屋禁挖区：`config/xiaoke-mcp.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2，出生点小屋+院子+地基），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外；她也不能在那里盖东西
 - 移动时原地发呆超过 2.5 秒会自动朝下一个路点跳一下（最多 3 次）
+- 视距只要 4 个区块（`XIAOKE_VIEW_DISTANCE` 可改）：服务器出口只有约 5 Mbps，按服务器视距 10 推区块会把带宽占满好几秒，真人玩家会卡住。实测视距 4 进服 1.3 MB（原来 4.5 MB），身边 80 格内仍然都是加载好的
+- 挑工具（`src/tool-choice.ts`）：换掉了 mineflayer-pathfinder 的 `bestHarvestTool`（没有比空手快的工具时它会随手拿背包第一件东西，于是拿镐挖土），并包住 `bot.dig`：所有挖掘都先换上真正更快的工具，用不上工具时不拿会磨损的东西，草和花不换工具；换装备排队进行；工具坏了、快坏了会写进 [进展] 和 `dig-block` 的回复，`list-inventory` 显示每件还能用几次
+- 盔甲（`src/armor.ts`）：背包里有更好的盔甲就自动穿上（皮 < 铜 < 金 < 锁链 < 铁 < 钻石 < 下界合金），干后台长活时等闲下来再换；`get-status` 显示身上穿着什么
 
 改完要在那个目录里 `npm run build` 才生效。
 
