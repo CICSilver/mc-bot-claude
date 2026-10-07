@@ -60,7 +60,9 @@ function analyze(session) {
 			const body = e.content.match(/<event>([\s\S]*?)<\/event>/)?.[1] ?? "";
 			const batch = body.split("\n").filter(Boolean).map(line => {
 				const m = line.match(/^\d\d-\d\d \d\d:\d\d \[([^\]]+)\] ?(.*)$/);
-				return { arrive: t, pickup: null, kind: m?.[1] ?? "?", text: m?.[2] ?? line, content: e.content };
+				// 快速反应层的事件后面跟着〔现在〕和“这段时间嘴巴那边”，统计时只看事件本身
+				const text = (m?.[2] ?? line).split(/　[〔（]/)[0];
+				return { arrive: t, pickup: null, kind: m?.[1] ?? "?", text, content: e.content };
 			});
 			events.push(...batch);
 			waiting.push(batch);
