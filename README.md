@@ -2,13 +2,11 @@
 
 住在 MC 服务器 `mc.lemalin.icu` 里的 AI 玩家：这个世界土生土长的原住民，一只隐居的猫猫“小克”。由 Claude Code 驱动，自己找地方安家、盖房、种田、养动物，会记日记、记住每个访客、跟大家慢慢变熟。
 
-> **这个分支（`claude/dual-mind`）是测试版小克**，跟正式的小克分开，可以同时在线：
-> - 登录名 `clawd_test`，耳朵端口 25612、身体端口 25613（正式版是 clawd、25599、25598）
-> - 记忆和好感度在 `test-home/`（不进 git），跟正式版分开、一直接着用。第一次启动时从 `memory-blank/` 的空白记忆开始；想让测试版从头来过，删掉 `test-home/memory` 和 `test-home/state` 再启动
-> - 皮肤和 clawd 是同一套：服务器 `world/skinrestorer/` 里把 clawd 的那份复制给了 clawd_test 的 UUID（`bbb85730-…`）
-> - 服务器数据包的 `/trigger xiaoke_*`（安家、传送回家、应急口粮、召唤、下线）只认 clawd，测试版用不了；队伍前缀 `[小克]` 也没有
-> - 正式的小克 clawd 在测试版眼里是 AI 同伴（跟大肥鱼一样，不算访客，限频转发）；反过来正式版那边会把 clawd_test 当成访客
-> - 这些都在 `config/xiaoke-body.json` 里，合回正式版时改回 clawd、25599/25598、`"home": "."`、去掉 `datapackTriggers`
+> **main 是正式的小克**：登录名 `clawd`，耳朵端口 25599、身体端口 25598，记忆和好感度就在本目录的 `memory/`、`state/`。
+>
+> 试新东西的分支（比如 `claude/dual-mind`、`claude/three-layer`）跑的是测试版小克 `clawd_test`，可以和正式版同时在线：耳朵 25612、身体 25613，记忆在 `test-home/`（不进 git，第一次启动从 `memory-blank/` 开始），`datapackTriggers` 是 false（服务器的 `/trigger xiaoke_*` 只认 clawd）。皮肤是同一套：服务器 `world/skinrestorer/` 里把 clawd 的那份复制给了 clawd_test 的 UUID（`bbb85730-…`）。
+>
+> 两边的区别只在 `config/xiaoke-body.json`。分支合进 main 时保留 main 的这份；**别把 main 合回测试分支**，不然测试版会用 clawd 的身份和正式记忆上线。
 
 ## 怎么启动
 

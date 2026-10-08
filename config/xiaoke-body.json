@@ -2,15 +2,14 @@
   "mcp": "../minecraft-mcp-server-xiaoke",
   "host": "mc.lemalin.icu",
   "port": 25565,
-  "username": "clawd_test",
-  "nick": "小克test",
-  "earPort": 25612,
-  "bodyPort": 25613,
-  "home": "./test-home",
-  "datapackTriggers": false,
+  "username": "clawd",
+  "nick": "小克",
+  "earPort": 25599,
+  "bodyPort": 25598,
+  "home": ".",
   "env": {
     "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
     "XIAOKE_ALIASES": "admin=CICSilver",
-    "XIAOKE_COMPANIONS": "Moby,clawd"
+    "XIAOKE_COMPANIONS": "Moby"
   }
 }
