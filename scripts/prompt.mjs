@@ -3,6 +3,7 @@
 //   prompts/系统/共用.md —— 世界、身体、两层分工、说话限制、好感度、安全（两层都看）
 //   prompts/系统/快.md、慢.md —— 这一层自己的规则；测试版.md —— 测试号另加的说明
 //   prompts/系统/手册/ —— 用到时再读的手册，目录只给慢的那一面（快的那一面读不了 prompts/）
+//   prompts/小克/参考/ —— 盖房子的参考（灵感卡、预览图，主人放进来的），目录也只给慢的那一面
 // 启动器（scripts/start.mjs）每次启动都会调用；也可以单独运行看看拼出来的样子和检查结果：
 //   node scripts/prompt.mjs        → 写到 logs/prompt-fast.preview.md、logs/prompt-mind.preview.md，并列出检查结果
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -10,7 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const MANUAL_DIR = "prompts/系统/手册";
+export const MANUAL_DIR = "prompts/系统/手册";
 const LAYER_FILES = { fast: "prompts/系统/快.md", mind: "prompts/系统/慢.md" };
 const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n");
 // <!-- --> 里是写给维护的人看的说明，不给小克
@@ -24,6 +25,23 @@ function loadManuals() {
 			title: file.replace(/\.md$/, ""),
 			when: text.match(/^>\s*什么时候读[：:]\s*(.+)$/m)?.[1].trim(),
 			text,
+		};
+	});
+}
+
+// 盖房子的参考：每个文件夹一份，灵感.md 开头写着“> 适合什么时候看：……”，旁边可能有预览图和材料表
+export const REFERENCE_DIR = "prompts/小克/参考";
+function loadReferences() {
+	const dir = join(ROOT, REFERENCE_DIR);
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort().map(name => {
+		const files = readdirSync(join(dir, name));
+		const card = files.includes("灵感.md") ? read(`${REFERENCE_DIR}/${name}/灵感.md`) : "";
+		return {
+			name,
+			hasCard: Boolean(card),
+			when: card.match(/^>\s*适合什么时候看[：:]\s*(.+)$/m)?.[1].trim(),
+			pictures: files.filter(f => /\.(png|jpe?g|webp)$/i.test(f)),
 		};
 	});
 }
@@ -48,15 +66,22 @@ function mcpToolNames() {
 	}
 }
 
-// layer: "fast" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明
-export function buildLayerPrompt(layer, { testBot = false } = {}) {
+// layer: "fast" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明；
+// manualPath / referencePath: 从小克的工作目录（记忆所在的 home）看，手册和参考在哪。home 不是本目录时，启动器会把它们拷一份过去
+export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR } = {}) {
 	const persona = stripComments(read("prompts/小克/人格.md"));
 	const life = stripComments(read("prompts/小克/生活.md"));
 	const shared = stripComments(read("prompts/系统/共用.md"));
 	const test = testBot ? stripComments(read("prompts/系统/测试版.md")) : "";
 	const own = stripComments(read(LAYER_FILES[layer]));
 	const manuals = loadManuals();
-	const index = manuals.map(m => `- 《${m.title}》（${m.path}）：${m.when ?? "随时可以翻翻"}`).join("\n");
+	const index = manuals.map(m => `- 《${m.title}》（${manualPath}/${m.title}.md）：${m.when ?? "随时可以翻翻"}`).join("\n");
+	const references = loadReferences();
+	const referenceIndex = references.filter(r => r.hasCard).map(r => {
+		const at = `${referencePath}/${r.name}`;
+		const pictures = r.pictures.map(p => `${at}/${p}`).join("、");
+		return `- 《${r.name}》（灵感卡 ${at}/灵感.md${pictures ? `；图 ${pictures}` : ""}）：${r.when ?? "想找点子的时候"}`;
+	}).join("\n");
 	const text = [
 		"以下是小克的设定。第一部分是你自己：你是谁、什么性子、怎么说话、怎么过日子。第二部分是这个世界、你的身体和两层分工的规则，最后是你这一层（反应快的那一面，或者慢慢想的那一面）自己的规则。\n" +
 		"两部分说法对不上时：安全、传送、下线、工具、机制和两层分工上的限制，以第二部分为准；在这些限制之内想做什么、怎么做、做成什么样子，按第一部分你自己的性子来。",
@@ -69,11 +94,16 @@ export function buildLayerPrompt(layer, { testBot = false } = {}) {
 		"---",
 		own,
 		...(layer === "mind" ? [`## 手册目录\n用 Read 读，路径照下面写：\n${index}`] : []),
+		...(layer === "mind" && referenceIndex ? [`## 盖房子的参考\n设计房子、院子之前挑两三份看看，借点子，别照着整栋盖。灵感卡和图都用 Read 看，路径照下面写：\n${referenceIndex}`] : []),
 	].join("\n\n") + "\n";
 
 	// 检查：手册都写了“什么时候读”；设定里提到的手册都存在；提到的工具 MCP 里都有
 	const warnings = [];
 	for (const m of manuals) if (!m.when) warnings.push(`手册《${m.title}》开头没写“> 什么时候读：……”`);
+	for (const r of references) {
+		if (!r.hasCard) warnings.push(`参考《${r.name}》还没有 灵感.md，先不给她看`);
+		else if (!r.when) warnings.push(`参考《${r.name}》的 灵感.md 开头没写“> 适合什么时候看：……”`);
+	}
 	const all = [text, ...manuals.map(m => m.text)].join("\n");
 	const titles = new Set(manuals.map(m => m.title));
 	for (const [, title] of all.matchAll(/手册《([^》]+)》/g)) if (!titles.has(title)) warnings.push(`提到了手册《${title}》，但 ${MANUAL_DIR}/ 里没有这本`);
@@ -83,7 +113,7 @@ export function buildLayerPrompt(layer, { testBot = false } = {}) {
 		const unknown = new Set([...all.matchAll(/(?<![\w./-])[a-z]+(?:-[a-z]+)+(?![\w-])/g)].map(m => m[0]).filter(n => !tools.has(n)));
 		if (unknown.size) warnings.push(`设定或手册里提到了 MCP 里没有的工具：${[...unknown].join("、")}`);
 	}
-	return { text, manuals, warnings };
+	return { text, manuals, references, warnings };
 }
 
 // 直接运行时：两层都拼出来看看

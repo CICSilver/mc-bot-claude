@@ -5,6 +5,10 @@
       "mcp__minecraft",
       "Monitor",
       "Read(./memory/**)",
+      "Read(./手册/**)",
+      "Read(./prompts/系统/手册/**)",
+      "Read(./参考/**)",
+      "Read(./prompts/小克/参考/**)",
       "Edit(./memory/**)"
     ],
     "deny": [

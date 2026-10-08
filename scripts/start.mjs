@@ -11,7 +11,8 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildLayerPrompt } from "./prompt.mjs";
+import { buildLayerPrompt, MANUAL_DIR, REFERENCE_DIR } from "./prompt.mjs";
+import { refreshReferences } from "./references.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -213,12 +214,24 @@ if (layer === "mind") {
 	// 每层的设定由 scripts/prompt.mjs 拼：她自己（prompts/小克/）+ 世界和身体的规则（prompts/系统/）+ 这一层自己的规则；每层只连身体上自己的那个地址。
 	// 服务器数据包的 /trigger 只认正式的登录名，测试版（datapackTriggers: false）另加一段说明。检查出对不上的地方只提醒，不拦着启动
 	const testBot = CONFIG.datapackTriggers === false;
+	// 盖房子的参考里新放进来的建筑文件：先补上预览图和材料表
+	await refreshReferences(line => console.log(line));
+	// 两层在 home 里跑，只读得到 home 里的文件。home 不是本目录（比如测试号的 test-home）时，把手册和参考拷一份进去，每次启动都换成最新的
+	let manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR;
+	if (HOME !== resolve(ROOT)) {
+		for (const [from, to] of [[MANUAL_DIR, "手册"], [REFERENCE_DIR, "参考"]]) {
+			rmSync(join(HOME, to), { recursive: true, force: true });
+			if (existsSync(from)) cpSync(from, join(HOME, to), { recursive: true });
+		}
+		manualPath = "手册";
+		referencePath = "参考";
+	}
 	const promptWarnings = new Set();
 	// 思维层的一轮什么时候开始、调了什么工具、什么时候结束，由 Claude Code 的 hook 直接告诉身体：身体据此知道她是不是在深想
 	const hook = [{ hooks: [{ type: "http", url: `${BODY_URL}/hook` }] }];
 	const anyTool = [{ matcher: "*", hooks: hook[0].hooks }];
 	for (const name of Object.keys(LAYERS)) {
-		const prompt = buildLayerPrompt(name, { testBot });
+		const prompt = buildLayerPrompt(name, { testBot, manualPath, referencePath });
 		for (const warning of prompt.warnings) if (!promptWarnings.has(warning)) { promptWarnings.add(warning); console.warn(`设定检查：${warning}`); }
 		writeFileSync(`logs/prompt-${name}.md`, fill(prompt.text));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
