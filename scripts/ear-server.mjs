@@ -34,8 +34,12 @@ const ALONE_MS = Number(process.env.ALONE_LOGOUT_MINUTES ?? 30) * 60 * 1000;
 // 启动器的进程号：它没了（窗口被直接关掉），耳朵也退出
 const PARENT_PID = Number(process.env.EAR_PARENT_PID) || 0;
 const SSH = process.env.SSH_BIN ?? "ssh";
-// 服务器上 MC 的目录（检查数据包和 server.properties 用）
-const SERVER_DIR = process.env.MC_SERVER_DIR ?? "/opt/minecraft/server";
+// 要连哪个服：main（正式服）或 test（测试服），启动器按 config 的 world 给。服务器上两个服共用一个入口、同一时间只开一个，
+// 开着的是谁、目录和控制台在哪，都问服务器上的 mc-active。开着的不是这个就听不到、也不发效果，免得正式小克听到测试服的聊天，
+// 或者把气泡发到别的世界去。不给就是“开着哪个算哪个”
+const SIDE = process.env.MC_SIDE ?? "";
+// 服务器上 MC 的目录（检查数据包和 server.properties 用）：开着的那个服的
+const SERVER_DIR = process.env.MC_SERVER_DIR ? `'${process.env.MC_SERVER_DIR}'` : `$(mc-active dir ${SIDE})`;
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"];
 
 // 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd”
@@ -217,7 +221,7 @@ function handleLog(line) {
 	} else if (RE_ADV.test(msg)) {
 		emit("成就", msg);
 	} else if ((m = msg.match(RE_DEATH))) {
-		// 自己死了三层都要知道：嘴巴喊一声，执行脑手上的活断了，决策脑重新打算（东西掉了、人在访客小屋）
+		// 自己死了三层都要知道：嘴巴喊一声，执行脑手上的活断了，决策脑重新打算（东西掉了、人回到出生点）
 		emit("死亡", msg, m[1] === SELF ? [FAST, EXEC, MIND] : ROUTES.死亡);
 	}
 }
@@ -229,7 +233,7 @@ function ssh(command) {
 function refreshOnline() {
 	return new Promise(resolve => {
 		let out = "";
-		const p = ssh("mc list");
+		const p = ssh(`MC_SIDE=${SIDE} mc list`);
 		p.stdout.on("data", d => (out += d));
 		p.on("close", () => {
 			const m = [...out.matchAll(/players online:(.*)/g)].pop();
@@ -247,13 +251,21 @@ function refreshOnline() {
 	});
 }
 
+// 听不到服务器（断线，或者开着的不是要连的服）时每 10 秒再试一次；“听不到了”只说一次，重新听到再说
+let deaf = false;
 async function follow() {
 	await refreshOnline();
-	console.log(`${ts()} 已连上服务器日志，${onlineText()}`);
-	const p = journal = ssh("journalctl -u minecraft -f -n 0 -o cat");
+	const p = journal = ssh(`mc-active log ${SIDE}`);
 	createInterface({ input: p.stdout }).on("line", handleLog);
+	// 连上 5 秒还没断，就算听到了（开着的不是要连的服时 mc-active 马上就退出）
+	const heard = setTimeout(() => {
+		console.log(`${ts()} 已连上服务器日志，${onlineText()}`);
+		deaf = false;
+	}, 5000);
 	p.on("close", () => {
-		emit("断线", "暂时听不到服务器了，10 秒后重连");
+		clearTimeout(heard);
+		if (!deaf) emit("断线", `暂时听不到服务器了${SIDE ? `（要连的是${SIDE === "test" ? "测试服" : "正式服"}）` : ""}，10 秒后重连`);
+		deaf = true;
 		setTimeout(follow, 10000);
 	});
 }
@@ -348,7 +360,7 @@ http.listen(PORT, "127.0.0.1", () => {
 process.on("exit", () => { journal?.kill(); consoleWriter?.kill(); });
 
 // ---- 让别人看见、听见她：气泡、猫叫、粒子 ----
-// 通过一根一直开着的 ssh 把命令写进服务器控制台（/run/minecraft.stdin）。
+// 通过一根一直开着的 ssh 把命令写进开着的那个服的控制台（mc-active console）。
 // 控制台执行的命令默认会以“[Server: ...]”的样子发给在线的管理员，所以要先在 server.properties 里设 broadcast-console-to-ops=false 并重启服务器；
 // 启动时检查这一点和数据包 xiaoke_fx 在不在，不满足就不发（XIAOKE_FX=on 强制打开，XIAOKE_FX=off 关掉）
 let fxEnabled = false;
@@ -360,10 +372,10 @@ function checkWorldFx() {
 	if (process.env.XIAOKE_FX === "on") { fxEnabled = true; console.log(`${ts()} 气泡、声音、粒子开着（XIAOKE_FX=on，没检查服务器）`); return; }
 	// server.properties 改了以后要重启过才算数。服务器启动时自己会把它重写一遍，所以启动后两分钟内写的也算
 	const check = [
-		`cd ${SERVER_DIR}`,
+		`d=${SERVER_DIR} && [ -n "$d" ] && cd "$d" || { echo side; exit; }`,
 		`grep -q '^broadcast-console-to-ops=false' server.properties || { echo props; exit; }`,
 		`test -f world/datapacks/xiaoke_fx/pack.mcmeta || { echo pack; exit; }`,
-		`pid=$(systemctl show -p MainPID --value minecraft)`,
+		`pid=$(systemctl show -p MainPID --value $(mc-active unit ${SIDE}))`,
 		`[ "$(stat -c %Y server.properties)" -lt "$(( $(date -d "$(ps -o lstart= -p $pid)" +%s) + 120 ))" ] || { echo restart; exit; }`,
 		`echo ok`,
 	].join("; ");
@@ -371,7 +383,7 @@ function checkWorldFx() {
 	const p = ssh(check);
 	p.stdout.on("data", d => (out += d));
 	p.on("close", () => {
-		const why = { props: "server.properties 里还没有 broadcast-console-to-ops=false（不然管理员会在聊天里看到一串 [Server: ...]）", pack: "服务器上还没装数据包 xiaoke_fx", restart: "改了 server.properties 以后服务器还没重启" }[out.trim()];
+		const why = { props: "server.properties 里还没有 broadcast-console-to-ops=false（不然管理员会在聊天里看到一串 [Server: ...]）", pack: "服务器上还没装数据包 xiaoke_fx", restart: "改了 server.properties 以后服务器还没重启", side: `现在开着的不是要连的服（${SIDE}）` }[out.trim()];
 		fxEnabled = out.trim() === "ok";
 		console.log(`${ts()} ${fxEnabled ? "气泡、声音、粒子开着" : `气泡、声音、粒子先关着：${why ?? `检查不了服务器（${out.trim() || "ssh 没有输出"}）`}`}`);
 	});
@@ -379,7 +391,7 @@ function checkWorldFx() {
 
 function writeConsole(line) {
 	if (!consoleWriter) {
-		consoleWriter = spawn(SSH, [...SSH_OPTS, SERVER, "cat > /run/minecraft.stdin"], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+		consoleWriter = spawn(SSH, [...SSH_OPTS, SERVER, `mc-active console ${SIDE}`], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
 		consoleWriter.on("close", () => { consoleWriter = null; });
 		consoleWriter.stdin.on("error", () => { consoleWriter = null; });
 	}

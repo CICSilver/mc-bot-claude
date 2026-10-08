@@ -133,11 +133,12 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 |---|---|
 | `prompts/小克/` | 她自己：`人格.md`、`生活.md`。**这两份归你改**，两层都看 |
 | `prompts/系统/` | 世界、身体和两层的规则：`共用.md`、`快.md`、`慢.md`、`测试版.md`，以及 `手册/`（决策脑用到时才读） |
+| `prompts/世界/` | 她在哪个世界：`正式世界.md`（正式服，10-08 新开的）、`测试世界.md`（测试服，原来那个有访客小屋的世界）。按 config 的 `world` 拼进三层的设定 |
 | `scripts/prompt.mjs` | 给每一层拼设定（启动时写到 `logs/prompt-*.md`），顺便检查对不上的地方 |
 | `scripts/references.mjs` | 给 `prompts/小克/参考/` 里的建筑文件画预览图、统计材料（启动时自动跑，也可以单独运行） |
 | `memory/` | 小克自己的记忆（在 `home` 里），决策脑读写、快速反应层只读：`self.md` 自己和心愿、`people.md` 对访客的印象、`world.md` 地点坐标、`goals.md` 打算、`journal/` 每天的日记 |
 | `state/relationships.json` | 好感度（在 `home` 里），由 MCP 读写。小克的权限碰不到这个文件 |
-| `config/xiaoke-body.json` | 小克这个人和身体的配置：MCP 在哪（`mcp`，相对本目录）、服务器（`host`、`port`）、登录名（`username`）、数据包消息里怎么称呼她（`nick`，测试版是“小克test”，免得把发给正式小克的召唤、下线当成自己的）、耳朵和身体的端口（`earPort`、`bodyPort`）、记忆放在哪（`home`）、服务器的 /trigger 认不认这个登录名（`datapackTriggers`，测试版是 false），以及给身体的环境变量（访客小屋禁挖区、小号对应关系、AI 同伴）。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用这个名字登录，把正在运行的小克挤下线 |
+| `config/xiaoke-body.json` | 小克这个人和身体的配置：MCP 在哪（`mcp`，相对本目录）、服务器（`host`、`port`）、登录名（`username`）、数据包消息里怎么称呼她（`nick`，测试版是“小克test”，免得把发给正式小克的召唤、下线当成自己的）、耳朵和身体的端口（`earPort`、`bodyPort`）、记忆放在哪（`home`）、在哪个世界（`world`：`正式世界` 或 `测试世界`，决定设定里的出生点和耳朵连哪个服）、服务器的 /trigger 认不认这个登录名（`datapackTriggers`，测试版是 false），以及给身体的环境变量（禁挖区、小号对应关系、AI 同伴）。两层连身体用的 MCP 配置由启动器生成在 `logs/mcp-*.json`；故意不放 `.mcp.json`，免得在本目录开普通会话时也用这个名字登录，把正在运行的小克挤下线 |
 | `memory-blank/` | 空白记忆模板：`home` 里还没有 `memory/` 时（第一次用），启动器拿它铺一份（`{{LOGIN}}` 换成登录名）；已经有了就不动 |
 | `config/xiaoke-fast-settings.json`、`config/xiaoke-mind-settings.json` | 两层的权限：都只允许游戏工具、Monitor 和读 memory，决策脑另外能写 memory，其它全部拒绝。启动器复制到 `logs/settings-*.json`（决策脑另加通知身体的 hook）再通过 `--settings` 传进去 |
 | `scripts/ear-server.mjs` | 小克的耳朵；也是她跟服务器控制台之间的线，身体要冒气泡、喵一声时找它 |
@@ -176,7 +177,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - `dig-block` 会自动换上最合适的工具；石头、矿石这类必须用工具的方块，手上没有就直接拒绝并说明需要什么
 - 寻路不会挖穿木板、圆石、玻璃、栅栏、门、楼梯、半砖、箱子、床、农田、庄稼等玩家造的东西（包括她自己盖的房子）；平时走路不垫方块（以前会在院子里垫一块泥土翻栅栏），挖方块也比绕几步路贵，她亲手放的方块只有实在没别的路才挖；只有 `dig-path-to` 才垫方块、往上爬（`src/movement-utils.ts`）
 - 寻路结果要核对（`installVerifiedGoto`）：mineflayer-pathfinder 找不到路或者想太久时，路径是空的也会当成功返回。机器人一连上就把所有寻路包一层，说完成了先看人是不是真在目标范围里，没到就报“没有路”或“超时”
-- 访客小屋禁挖区：`config/xiaoke-body.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2，出生点小屋+院子+地基），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外；她也不能在那里盖东西
+- 禁挖区：`config/xiaoke-body.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2；测试版是测试世界的访客小屋+院子+地基，正式世界还没有要护着的地方，正式版不设），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外；她也不能在那里盖东西
 - 移动时原地发呆超过 2.5 秒会自动朝下一个路点跳一下（最多 3 次）
 - 门（`src/doors.ts`）：mineflayer-pathfinder 原本把门当墙（开着的也过不去），现在寻路把木门、铜门、栅栏门当成能走过去的格子（关着的稍微贵一点，能绕一两步就绕），走到跟前自己开门，过去后把自己开的门随手关上；她进门那一侧 4 格内有人、门口站着人或动物时先不关，`lure-animals` 引动物时也先开着。点两次都没反应的门一分钟内绕开走。铁门还是当墙。`use-door` 手动开关门、栅栏门和活板门
 - 视距只要 4 个区块（`XIAOKE_VIEW_DISTANCE` 可改）：服务器出口只有约 5 Mbps，按服务器视距 10 推区块会把带宽占满好几秒，真人玩家会卡住。实测视距 4 进服 1.3 MB（原来 4.5 MB），身边 80 格内仍然都是加载好的
@@ -191,23 +192,38 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 
 改完要在那个目录里 `npm run build` 才生效。
 
-## 访客小屋和小克的家（服务器上）
+## 服务器：正式服和测试服
 
-- 访客小屋在重生点 (0, 133, 0)，重生范围是 0，新玩家和死掉的人都在屋里出现。屋里有床、熔炉、工作台、木桶和一箱给访客的常用品；门口是小麦田，院子有栅栏，北边 (0, 133, -11) 是出口
-- 数据包 `world/datapacks/safezone`：每秒把小屋 32 格内的敌对生物送进虚空；外围放了看不见的光源方块防止刷怪
+10-08 起服务器上有两个世界，共用 `mc.lemalin.icu` 一个入口，同一时间只开一个：
+
+- **正式服**（`/opt/minecraft/server`，服务 `minecraft`，开机自启）：10-08 新开的世界，种子 2032169，出生点 (-32, 64, 49)，一带是热带草原，还什么都没盖。正式小克（clawd，`world: 正式世界`）住这里，记忆 10-08 清空重新开始，旧的归档在 `../归档/小克-旧世界-20261008/`
+- **测试服**（`/opt/minecraft/test`，服务 `minecraft-test`，平时关着）：原来那个世界，访客小屋和各种测试留下的东西都在。测试号 clawd_test（`world: 测试世界`）用
+- **切换**（在服务器上）：`mc-switch test` 开测试服（正式服先存档关掉），测完 `mc-switch main` 切回来，`mc-switch status` 看现在开着哪个、谁在线。开着的那个服上有人就不切，确定要把人踢下线再加 `--force`。服务器列表里测试服的标题前面有“[测试服]”
+- **防走错**：正式服封禁了 clawd_test；测试服封禁了 clawd 和 Moby（进去了会记进它们的正式记忆）
+- **控制台**：`mc <命令>` 发给开着的那个服，`MC_SIDE=test mc list` 只发给测试服；`mc-active` 说开着的是哪个，`mc-active dir|unit|fifo|log|console [main|test]` 给出它的目录、服务、控制台、日志。耳朵也通过它连服务器：启动器按 `world` 设 `MC_SIDE`，开着的不是自己那个服，耳朵就听不到、也不发效果，免得正式小克听到测试服
+- **备份**：正式世界每天 05:00 备份到 `/opt/minecraft/backups/main`，留 7 份（手动 `mc-backup`）。10-08 拆分前的整个服务端在 `/opt/minecraft/backups/server-before-split-20261008.tar.gz`，旧世界原样另存在 `backups/world-old-20261008`
+
+### 两个世界都有的
+- 数据包 `world/datapacks/safezone`（两个世界各一份）：每秒把出生点 32 格内的敌对生物送进虚空。正式服那份的出生点改成了 (-32, 64, 49)（`sweep.mcfunction`、`tp_home.mcfunction`、`moby_self_tp_go.mcfunction`）
 - **小克的家**：她用 `/trigger xiaoke_sethome` 记下位置（存在 storage `safezone:xiaoke home`），之后那里 32 格内的怪物也会被清走。只有 clawd 能用，可以重复执行来搬家。想清掉：`scoreboard players reset #home xiaoke_home_set`
 - 小克的应急口粮：她在聊天里发 `/trigger xiaoke_food`，饱食度 4 以下才发 3 个面包，冷却 5 分钟，只有 clawd 能用
-- 小克自己只能 `/trigger xiaoke_tp` 传送回家（安了家回自己家，没安家回访客小屋），冷却 2 分钟，设定里规定只有挖路脱困也失败了才用
+- 小克自己只能 `/trigger xiaoke_tp` 传送回家（安了家回自己家，没安家回出生点），冷却 2 分钟，设定里规定只有挖路脱困也失败了才用
 - **让小克下线**：执行 `/trigger xiaoke_logout`，她会收拾好、写完日记、说再见再下线，启动器看到她下线会自动关窗口。只有 CICSilver 和 admin 能用。只说“睡觉”“晚安”她会去睡觉，不会下线
 - **召唤小克**：在游戏里执行 `/trigger xiaoke_summon`，小克会被拉到身边。只有 CICSilver 和 admin 能用，聊天里喊“小克快过来”不会触发
-- 屋顶正中间 (0, 136, 0) 开了个天窗：游戏会把出生的人放在重生点那一列最高的方块上，有屋顶的话大家会出生在屋顶上
-- 改了数据包后执行 `reload`，还要再执行一次 `function safezone:load`（这个版本 reload 不会自动跑初始化，不跑的话每秒清怪和各种 trigger 会停）
+- 改了数据包后执行 `reload`，还要再执行一次 `function safezone:load` 和 `function xiaoke_fx:load`（这个版本 reload 不会自动跑初始化，不跑的话每秒清怪和各种 trigger 会停）
 - 服务器的出生点保护已经关掉（`spawn-protection=0`），不然非管理员在出生点附近挖不了东西
 - 模组 `mods/xiaoke-bridge-1.0.0.jar`（10-07 装的，源码在本仓库 `server/xiaoke-bridge`，配置 `config/xiaoke-bridge.json` 里写着哪些是 AI 玩家）：玩家空手右键小克是摸头、蹲着右键是牵手、拿着东西右键是直接递给她（不用扔在地上），服务器给小克发一条系统消息，身体转成 [互动] / [礼物]，头顶冒爱心、呼噜一声；谁都可以空手右键楼梯（下半）、下半砖、地毯坐下，按潜行起来。小克用 `ride` 填 kind=seat 坐，琢磨事情时旁边有楼梯也会坐上去想
-- 数据包 `world/datapacks/xiaoke_fx`：气泡、猫叫、粒子（源文件在本仓库 `server/datapacks/xiaoke_fx`）。耳朵通过 ssh 把 `function xiaoke_fx:...` 写进控制台（`/run/minecraft.stdin`）
+- 数据包 `world/datapacks/xiaoke_fx`：气泡、猫叫、粒子（源文件在本仓库 `server/datapacks/xiaoke_fx`）。耳朵通过 ssh 把 `function xiaoke_fx:...` 写进开着的那个服的控制台（`mc-active console`）
 - `server.properties` 里 `broadcast-console-to-ops=false`（10-07 改的，原来的备份在 `server.properties.bak-20261007-xiaoke-fx`）：不然控制台每执行一条命令，在线的管理员（admin）聊天里都会冒一行“[Server: Running function ...]”。耳朵启动时会检查这一项、数据包在不在、改完有没有重启，不满足就先不发效果（日志里写原因）；`XIAOKE_FX=off` 关掉，`XIAOKE_FX=on` 不检查直接开
 
+### 测试服的访客小屋
+- 访客小屋在重生点 (0, 133, 0)，重生范围是 0，新玩家和死掉的人都在屋里出现。屋里有床、熔炉、工作台、木桶和一箱给访客的常用品；门口是小麦田，院子有栅栏，北边 (0, 133, -11) 是出口
+- 外围放了看不见的光源方块防止刷怪
+- 屋顶正中间 (0, 136, 0) 开了个天窗：游戏会把出生的人放在重生点那一列最高的方块上，有屋顶的话大家会出生在屋顶上
+
 ## 邻居大肥鱼（第二个 AI 玩家）
+
+10-08 起不再开发，下面是原来的说明。
 
 旁边的 `../mc-bot-deepseek` 是第二个 AI 玩家“大肥鱼”（登录名 `Moby`，模型 DeepSeek），可以和小克同时在线：耳朵端口 25600、服务器 trigger `moby_*`、队伍前缀 `[大肥鱼]`，都和小克分开，详见那边的 README。
 

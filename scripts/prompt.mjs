@@ -1,6 +1,7 @@
 // 把小克的设定拼成每一层的系统提示词，顺便检查几处容易对不上的地方：
 //   prompts/小克/人格.md、生活.md —— 她是谁、怎么过日子（主人自己维护）。快速反应层和决策脑看；执行脑只管把活做成，不带这两份，免得每走一步都重读
 //   prompts/系统/共用.md —— 世界、身体、三层分工、说话限制、好感度、安全（三层都看）
+//   prompts/世界/<world>.md —— 她在哪个世界：出生点在哪、有什么。正式版和测试版各连一个服，用 config/xiaoke-body.json 的 world 选（三层都看）
 //   prompts/系统/快.md、执行.md、决策.md —— 这一层自己的规则；测试版.md —— 测试号另加的说明
 //   prompts/系统/手册/ —— 用到时再读的手册，目录给执行脑和决策脑（快速反应层用不上）
 //   prompts/小克/参考/ —— 盖房子的参考（灵感卡、预览图，主人放进来的），目录只给决策脑
@@ -12,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MANUAL_DIR = "prompts/系统/手册";
+export const WORLD_DIR = "prompts/世界";
 const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/决策.md" };
 export const LAYER_NAMES = Object.keys(LAYER_FILES);
 // 哪一层带她自己的两份（人格、生活），哪一层有手册目录、参考目录
@@ -71,12 +73,19 @@ function mcpToolNames() {
 	}
 }
 
-// layer: "fast"、"exec" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明；
+// 这个小克在哪个世界：config/xiaoke-body.json 的 world（正式版“正式世界”，测试版“测试世界”）
+function configuredWorld() {
+	try { return JSON.parse(read("config/xiaoke-body.json")).world; } catch { return undefined; }
+}
+
+// layer: "fast"、"exec" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明；world: prompts/世界/ 里哪一份，不给就看 config；
 // manualPath / referencePath: 从小克的工作目录（记忆所在的 home）看，手册和参考在哪。home 不是本目录时，启动器会把它们拷一份过去
-export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR } = {}) {
+export function buildLayerPrompt(layer, { testBot = false, world = configuredWorld(), manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR } = {}) {
 	const persona = stripComments(read("prompts/小克/人格.md"));
 	const life = stripComments(read("prompts/小克/生活.md"));
 	const shared = stripComments(read("prompts/系统/共用.md"));
+	const worldFile = world ? `${WORLD_DIR}/${world}.md` : null;
+	const worldText = worldFile && existsSync(join(ROOT, worldFile)) ? stripComments(read(worldFile)) : "";
 	const test = testBot ? stripComments(read("prompts/系统/测试版.md")) : "";
 	const own = stripComments(read(LAYER_FILES[layer]));
 	const manuals = loadManuals();
@@ -96,6 +105,7 @@ export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_D
 		"---",
 		...(WITH_PERSONA.has(layer) ? [persona, life, "---"] : []),
 		shared,
+		...(worldText ? [worldText] : []),
 		...(test ? [test] : []),
 		"---",
 		own,
@@ -105,6 +115,8 @@ export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_D
 
 	// 检查：手册都写了“什么时候读”；设定里提到的手册都存在；提到的工具 MCP 里都有
 	const warnings = [];
+	if (!world) warnings.push(`config/xiaoke-body.json 没写 world（${WORLD_DIR}/ 里的哪个世界），她不知道出生点在哪`);
+	else if (!worldText) warnings.push(`config 里的 world 是“${world}”，但 ${worldFile} 不存在`);
 	for (const m of manuals) if (!m.when) warnings.push(`手册《${m.title}》开头没写“> 什么时候读：……”`);
 	for (const r of references) {
 		if (!r.hasCard) warnings.push(`参考《${r.name}》还没有 灵感.md，先不给她看`);

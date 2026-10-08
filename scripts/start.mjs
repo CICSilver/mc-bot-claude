@@ -226,6 +226,8 @@ if (layer !== "fast") {
 			...process.env,
 			EAR_PORT: String(EAR_PORT), MC_BOT_NAME: CONFIG.username, MC_BOT_NICK: CONFIG.nick ?? "小克",
 			MC_COMPANIONS: CONFIG.env?.XIAOKE_COMPANIONS ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL,
+			// 耳朵只听这个世界所在的服：正式世界在正式服（main），测试世界在测试服（test）
+			MC_SIDE: { 正式世界: "main", 测试世界: "test" }[CONFIG.world] ?? "",
 		},
 	});
 
@@ -265,7 +267,7 @@ if (layer !== "fast") {
 		return { UserPromptSubmit: hook, PreToolUse: anyTool, PostToolUse: anyTool, Stop: hook };
 	};
 	for (const name of Object.keys(LAYERS)) {
-		const prompt = buildLayerPrompt(name, { testBot, manualPath, referencePath });
+		const prompt = buildLayerPrompt(name, { testBot, world: CONFIG.world, manualPath, referencePath });
 		for (const warning of prompt.warnings) if (!promptWarnings.has(warning)) { promptWarnings.add(warning); console.warn(`设定检查：${warning}`); }
 		writeFileSync(`logs/prompt-${name}.md`, fill(prompt.text));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
