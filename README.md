@@ -145,6 +145,8 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `server/xiaoke-bridge` | 服务器模组 xiaoke-bridge 的源码（只装服务器，玩家不用装），`python server/xiaoke-bridge/build.py` 编译成 `build/xiaoke-bridge-1.0.0.jar`，说明见那里的 README |
 | `server/datapacks/xiaoke_fx` | 服务器上的数据包源文件（装在服务器 `world/datapacks/xiaoke_fx`）：气泡是一个 text_display，每 tick 挪到主人头顶、到时间收掉，主人下线也收掉；声音和粒子在主人身上放。几个 AI 玩家可以同时用 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开决策脑的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
+| `scripts/cost.mjs` | 算一局里每一层发了多少次请求、读写多少 token，按 API 价粗算花了多少，跑腿的请求按用途分一分（`node scripts/cost.mjs`，或者 `mind=会话号 fast=会话号` 指定） |
+| `测试场景/` | 对比测试用的现成东西：建材箱的控制台命令、告诉她箱子在哪的 [记下]，用法见 [测试方案.md](测试方案.md) 最后一节 |
 | `scripts/measure.mjs` | 体检：从会话记录里算出她多久回话、正忙时回话要多久、每次想了多少、长活顺不顺，单层和两层的会话可以放一起比（`--list` 列出所有小克会话）。怎么测见 [测试方案.md](测试方案.md) |
 | `start-xiaoke.cmd` | 双击用的入口，只调用 `scripts/start.mjs`。这个文件必须保持纯英文，cmd 读中文会出错 |
 
@@ -159,7 +161,9 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 本能（`src/senses.ts`）：天气、注视、危险事件，转头看人，`run-away` 逃跑；`chase-animal` 追着小动物玩。`XIAOKE_COMPANIONS` 里的 AI 同伴不算“盯着看”。在外面干长活时下起雨会自动停手
 - 熔炉（`src/tools/furnace-tools.ts`）：`smelt-item` 放进去就返回，烧好了发 [进展]；`take-from-furnace` 取出来
 - 陪伴（`src/companion.ts`、`src/tools/companion-tools.ts`）：`accompany-player` 在玩家身边随意走动、顺手干活；`roam-around` 围着一个地点自己逛；`follow-player` 紧跟；`stop-following` 停下。调试时设环境变量 `COMPANION_DEBUG=1`
-- 箱子（`src/tools/container-tools.ts`）：`open-container`、`take-item`、`store-item`
+- 箱子（`src/tools/container-tools.ts`）：`open-container`、`take-item`、`store-item`。拿到、存进的比要的少会如实说（`Partly took` / `Partly stored`），回复里只说这一样东西现在有多少；关箱子以后先让服务器重发一遍背包，再按服务器给的数核对
+- 合成（`src/tools/crafting-tools.ts`）：只做成一部分时回复 `Partly crafted`，写清做成几次、为什么停、现在有多少，`do-steps` 不会把它当成功接着做下一步；合成完也跟服务器核对一遍背包
+- 背包同步（`src/inventory-sync.ts`）：开着箱子时服务器改了背包，箱子窗口里那份背包副本也跟着改，关箱子时 mineflayer 就不会把旧的抄回去
 - 互动（`src/tools/interaction-tools.ts`）：`drop-item` 丢东西或扔给某个玩家、`use-item-on-entity` 喂养/驯服/繁殖/剪毛、`fish` 钓一竿
 - `set-reminder` 给自己定提醒（最多 5 个、最长 60 分钟）；`logout` 下线（下线后不会再自动重连）
 - 结束长活、提醒到点、收到礼物时，通过 `src/ear-link.ts` 告诉耳朵（地址配在 `XIAOKE_EAR_URL`）
@@ -170,7 +174,8 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 琢磨和闲不住（`src/idle.ts`）：决策脑深想时蹲下晃一晃、坐进旁边空着的船或矿车；闲着时东张西望、挪一两步；任何要动身体的工具一来马上让开（站起来、下船）。还负责发 [琢磨]、[闲聊] 给快速反应层
 - 图纸挖空的顺序（`digOrder`）：站在要挖的地方外面（比如在山壁前凿洞）时，从靠近自己的那一面开始一排一排往里推，每一排从上往下挖；站在里面或上面时一层一层往下挖。以前只按高度排，会先把整个房间的最上面一层挖完，看起来像乱挖，深处的方块也够不着
 - `dig-block` 会自动换上最合适的工具；石头、矿石这类必须用工具的方块，手上没有就直接拒绝并说明需要什么
-- 寻路不会挖穿木板、圆石、玻璃、栅栏、门、楼梯、半砖、箱子、床、农田、庄稼等玩家造的东西（包括她自己盖的房子）；平时不垫方块往上爬，只有 `dig-path-to` 才会（`src/movement-utils.ts`）
+- 寻路不会挖穿木板、圆石、玻璃、栅栏、门、楼梯、半砖、箱子、床、农田、庄稼等玩家造的东西（包括她自己盖的房子）；平时走路不垫方块（以前会在院子里垫一块泥土翻栅栏），挖方块也比绕几步路贵，她亲手放的方块只有实在没别的路才挖；只有 `dig-path-to` 才垫方块、往上爬（`src/movement-utils.ts`）
+- 寻路结果要核对（`installVerifiedGoto`）：mineflayer-pathfinder 找不到路或者想太久时，路径是空的也会当成功返回。机器人一连上就把所有寻路包一层，说完成了先看人是不是真在目标范围里，没到就报“没有路”或“超时”
 - 访客小屋禁挖区：`config/xiaoke-body.json` 里的 `XIAOKE_HOME_ZONE`（x1,y1,z1,x2,y2,z2，出生点小屋+院子+地基），寻路不在里面挖和垫方块，`dig-block` 也拒绝，收庄稼割草除外；她也不能在那里盖东西
 - 移动时原地发呆超过 2.5 秒会自动朝下一个路点跳一下（最多 3 次）
 - 门（`src/doors.ts`）：mineflayer-pathfinder 原本把门当墙（开着的也过不去），现在寻路把木门、铜门、栅栏门当成能走过去的格子（关着的稍微贵一点，能绕一两步就绕），走到跟前自己开门，过去后把自己开的门随手关上；她进门那一侧 4 格内有人、门口站着人或动物时先不关，`lure-animals` 引动物时也先开着。点两次都没反应的门一分钟内绕开走。铁门还是当墙。`use-door` 手动开关门、栅栏门和活板门
@@ -222,7 +227,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 
 ## 接下来要做的
 
-还没做或还没想好的事（心情系统等）记在 [下一步.md](下一步.md)。
+现在做到哪、接下来的顺序记在 [下一步.md](下一步.md)；心情和记忆（经历、惦记、联想、recall）10-08 商量定的方案在 [心情和记忆.md](心情和记忆.md)，还没动手。
 
 ## 想改点什么
 
