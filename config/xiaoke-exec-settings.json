@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "mcp__minecraft",
+      "Monitor",
+      "Read(./memory/**)",
+      "Read(./手册/**)",
+      "Read(./prompts/系统/手册/**)"
+    ],
+    "deny": [
+      "Edit",
+      "Write",
+      "Bash",
+      "PowerShell",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Agent",
+      "Skill",
+      "Workflow",
+      "SendMessage",
+      "ListAgents",
+      "PushNotification",
+      "ReportFindings",
+      "Artifact",
+      "ArtifactComments",
+      "ArtifactData",
+      "DesignSync",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "EnterWorktree",
+      "ExitWorktree",
+      "RemoteTrigger",
+      "Read(~/.ssh/**)",
+      "Read(~/.claude/**)"
+    ]
+  }
+}

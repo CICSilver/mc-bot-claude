@@ -7,8 +7,8 @@
   "earPort": 25599,
   "bodyPort": 25598,
   "home": ".",
+  "world": "正式世界",
   "env": {
-    "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
     "XIAOKE_ALIASES": "admin=CICSilver",
     "XIAOKE_COMPANIONS": "Moby"
   }

@@ -1,8 +1,9 @@
 // 小克的耳朵：连上 MC 服务器读日志，把游戏事件通过本机 WebSocket 推给小克（Claude Code 的 Monitor）。
 // 每个事件是一条文本消息，格式：月-日 时:分 [类型] 内容
-// 小克的脑子分成一快一慢两层（见 scripts/start.mjs），各连一个地址，耳朵按事件类型分给它们：
+// 小克的脑子分成三层（见 scripts/start.mjs），各连一个地址，耳朵按事件类型分给它们：
 // - ws://127.0.0.1:25599/fast  快速反应层：聊天、进出、礼物、注视……来了马上接话。后面附上〔现在〕（问身体要的一行状况）
-// - ws://127.0.0.1:25599/mind  思维层：长活结束、提醒、空闲、天气、[记下]、下线……慢慢想。后面附上这段时间快速反应层那边发生的事
+// - ws://127.0.0.1:25599/exec  执行脑：派来的活、长活结束、危险、天气……把活做成。后面也附上〔现在〕
+// - ws://127.0.0.1:25599/mind  决策脑：执行脑的汇报、[记下]、提醒、空闲、下线……拿主意。后面附上这段时间快速反应层那边发生的事
 // 耳朵也是她跟服务器控制台之间的一根线：身体想冒气泡、喵一声、冒爱心时 POST /effect，耳朵换成调用数据包 xiaoke_fx 的命令（world-fx.mjs）
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -22,19 +23,23 @@ const NICK = process.env.MC_BOT_NICK ?? "小克";
 const COMPANIONS = new Set((process.env.MC_COMPANIONS ?? "").split(",").map(s => s.trim()).filter(Boolean));
 const COMPANION_CHAT_MS = Number(process.env.COMPANION_CHAT_SECONDS ?? 60) * 1000;
 const isBot = who => who === SELF || COMPANIONS.has(who);
-// 有人在线、思维层却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
-// 快速反应层那边的聊天不算思维层的动静
+// 有人在线、决策脑却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
+// 快速反应层那边的聊天不算决策脑的动静
 const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 60) * 1000;
 const IDLE_MAX_MS = Number(process.env.IDLE_MAX_SECONDS ?? 150) * 1000;
-// 快速反应层那边一直热闹、思维层这么久没被叫醒过，就叫它回顾一下（[回顾]）
+// 快速反应层那边一直热闹、决策脑这么久没被叫醒过，就叫它回顾一下（[回顾]）
 const REVIEW_MS = Number(process.env.REVIEW_MINUTES ?? 4) * 60 * 1000;
 // 世界里只剩小克一个人这么久，就提醒她收拾收拾下线（[独处]）
 const ALONE_MS = Number(process.env.ALONE_LOGOUT_MINUTES ?? 30) * 60 * 1000;
 // 启动器的进程号：它没了（窗口被直接关掉），耳朵也退出
 const PARENT_PID = Number(process.env.EAR_PARENT_PID) || 0;
 const SSH = process.env.SSH_BIN ?? "ssh";
-// 服务器上 MC 的目录（检查数据包和 server.properties 用）
-const SERVER_DIR = process.env.MC_SERVER_DIR ?? "/opt/minecraft/server";
+// 要连哪个服：main（正式服）或 test（测试服），启动器按 config 的 world 给。服务器上两个服共用一个入口、同一时间只开一个，
+// 开着的是谁、目录和控制台在哪，都问服务器上的 mc-active。开着的不是这个就听不到、也不发效果，免得正式小克听到测试服的聊天，
+// 或者把气泡发到别的世界去。不给就是“开着哪个算哪个”
+const SIDE = process.env.MC_SIDE ?? "";
+// 服务器上 MC 的目录（检查数据包和 server.properties 用）：开着的那个服的
+const SERVER_DIR = process.env.MC_SERVER_DIR ? `'${process.env.MC_SERVER_DIR}'` : `$(mc-active dir ${SIDE})`;
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"];
 
 // 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd”
@@ -48,28 +53,33 @@ const RE_LEFT = new RegExp(`^${NAME} left the game$`);
 const RE_ADV = new RegExp(`^${NAME} has (made the advancement|completed the challenge|reached the goal) `);
 const RE_DEATH = new RegExp(`^${NAME} (was |drowned|fell |hit the ground|burned|went up in flames|went off|tried to swim|blew up|starved|suffocated|died|froze|walked into|experienced kinetic|withered|discovered the floor|didn't want|left the confines)`);
 
-// 哪类事件叫醒哪一层。快速反应层管嘴巴和小动作，思维层管打算、长活和记忆
-const FAST = "fast", MIND = "mind";
+// 哪类事件叫醒哪一层。快速反应层管嘴巴和社交，执行脑管把活做成，决策脑管打算、取舍和记忆
+const FAST = "fast", EXEC = "exec", MIND = "mind";
+const NAMES = { [FAST]: "快速反应层", [EXEC]: "执行脑", [MIND]: "决策脑" };
 const ROUTES = {
-	聊天: [FAST], 进服: [FAST], 离开: [FAST], 成就: [FAST], 死亡: [FAST], 礼物: [FAST], 注视: [FAST], 召唤: [FAST],
-	危险: [FAST, MIND], 断线: [FAST, MIND],
-	// 身体看到的：思维层在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
+	聊天: [FAST], 进服: [FAST], 离开: [FAST], 成就: [FAST], 死亡: [FAST], 礼物: [FAST], 注视: [FAST],
+	// 召唤会打断手上的活；危险时身体已经本能地跑开了，嘴巴冒一句，执行脑看看活怎么办
+	召唤: [FAST, EXEC], 危险: [FAST, EXEC], 断线: [FAST, EXEC, MIND],
+	// 派活、长活结束、下雨雨停：执行脑处理；执行脑的汇报：决策脑拿主意
+	任务: [EXEC], 汇报: [MIND],
+	// 身体看到的：决策脑在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
 	琢磨: [FAST], 闲聊: [FAST],
-	// 思维层想好了要说的话：聊天框里只有快速反应层一张嘴，托它说出口
+	// 决策脑想好了要说的话：聊天框里只有快速反应层一张嘴，托它说出口
 	转告: [FAST],
 	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
 	互动: [FAST], 看见: [FAST], 游戏: [FAST],
-	进展: [MIND], 提醒: [MIND], 空闲: [MIND], 天气: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
+	进展: [EXEC], 天气: [EXEC], 提醒: [MIND], 空闲: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
 };
 
 const online = new Set();      // 在线的真人访客
 const companionsOnline = new Set();
-const clients = { [FAST]: new Set(), [MIND]: new Set() };
-const pending = { [FAST]: [], [MIND]: [] };   // 那一层没在听时攒下的事件，等它连上再一起给
-// 只叫醒了快速反应层的事（还有小克自己在聊天里说的话），攒着，下次叫醒思维层时一起给它看
+const clients = { [FAST]: new Set(), [EXEC]: new Set(), [MIND]: new Set() };
+const pending = { [FAST]: [], [EXEC]: [], [MIND]: [] };   // 那一层没在听时攒下的事件，等它连上再一起给
+// 只叫醒了快速反应层的事（还有小克自己在聊天里说的话），攒着，下次叫醒决策脑时一起给它看
 const digest = [];
 let lastMindAt = Date.now();
-let fastQueue = Promise.resolve();   // 给快速反应层的事件要先问身体要〔现在〕，排好队免得顺序乱
+// 给快速反应层、执行脑的事件要先问身体要〔现在〕，各排一队免得顺序乱
+const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve() };
 let idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
 let journal = null;   // 读服务器日志的 ssh 进程，耳朵退出时一起关掉
 let busyUntil = 0;    // 小克在做后台长活（砍树、钓鱼、探险……）时不发 [空闲]，做完会有 [进展] 叫醒她
@@ -80,7 +90,7 @@ const pad = n => String(n).padStart(2, "0");
 const ts = () => { const d = new Date(); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const onlineText = () => (online.size ? `在线：${[...online].join(" ")}` : "现在没有其他人在线")
 	+ (companionsOnline.size ? `（AI 同伴在线：${[...companionsOnline].join(" ")}）` : "");
-const listening = () => clients[FAST].size + clients[MIND].size;
+const listening = () => clients[FAST].size + clients[EXEC].size + clients[MIND].size;
 
 function frame(text) {
 	const payload = Buffer.from(text, "utf8");
@@ -91,18 +101,16 @@ function frame(text) {
 	return Buffer.concat([header, payload]);
 }
 
-// 告诉身体思维层这一轮开始了（一轮结束由思维层的 Stop hook 直接告诉身体）
-function mindStarted() {
-	fetch(`${BODY_URL}/mind-state`, {
+// 告诉身体决策脑 / 执行脑这一轮开始了（一轮结束由它们的 Stop hook 直接告诉身体）
+function turnStarted(layer) {
+	fetch(`${BODY_URL}/mind-state?layer=${layer}`, {
 		method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ active: true }), signal: AbortSignal.timeout(1000),
 	}).catch(() => {});
 }
 
 function deliver(layer, text) {
-	if (layer === MIND) {
-		lastMindAt = Date.now();
-		if (clients[MIND].size) mindStarted();
-	}
+	if (layer === MIND) lastMindAt = Date.now();
+	if (layer !== FAST && clients[layer].size) turnStarted(layer);
 	if (clients[layer].size === 0) {
 		pending[layer].push(text);
 		if (pending[layer].length > 50) pending[layer].shift();
@@ -130,9 +138,9 @@ async function withSnapshot(line) {
 	return line;
 }
 
-// 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进思维层要看的“这段时间”
+// 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进决策脑要看的“这段时间”
 const NUDGES = new Set(["琢磨", "闲聊"]);
-// 思维层自己托出去的话，不用再给它看一遍；快速反应层真说出口的那句会以“你: ……”出现在“这段时间”里
+// 决策脑自己托出去的话，不用再给它看一遍；快速反应层真说出口的那句会以“你: ……”出现在“这段时间”里
 const FROM_MIND = new Set(["转告"]);
 
 function emit(kind, body, to = ROUTES[kind]) {
@@ -140,16 +148,21 @@ function emit(kind, body, to = ROUTES[kind]) {
 	const line = `${ts()} [${kind}] ${body}`;
 	console.log(`${line}  → ${to.join("+")}`);
 	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
-	else if (!NUDGES.has(kind) && !FROM_MIND.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
-	if (to.includes(FAST)) fastQueue = fastQueue.then(() => withSnapshot(line)).then(text => deliver(FAST, text)).catch(e => console.log(`${ts()} 发给快速反应层失败：${e}`));
+	// 只叫醒了快速反应层的事，攒着给决策脑看；执行脑那边的事它从 [汇报] 里知道
+	else if (to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
+	for (const layer of [FAST, EXEC]) {
+		if (!to.includes(layer)) continue;
+		queues[layer] = queues[layer].then(() => withSnapshot(line)).then(text => deliver(layer, text)).catch(e => console.log(`${ts()} 发给${NAMES[layer]}失败：${e}`));
+	}
 }
 
-// 思维层闲了多久：问身体（它从 hook 和工具调用知道这一轮结束了没有）；问不到就看多久没给它递过事件
+// 决策脑闲了多久：问身体（它从 hook 和工具调用知道这一轮结束了没有）；问不到就看多久没给它递过事件
 async function mindIdleMs() {
 	try {
 		const res = await fetch(`${BODY_URL}/mind-state`, { signal: AbortSignal.timeout(800) });
 		const state = await res.json();
-		return state.jobBusy ? 0 : Number(state.idleMs) || 0;
+		// 执行脑手上还有活（或者在干后台长活），决策脑就不算闲着
+		return state.jobBusy || state.tasksOpen ? 0 : Number(state.idleMs) || 0;
 	} catch {
 		return Date.now() - lastMindAt;
 	}
@@ -191,7 +204,7 @@ function handleLog(line) {
 		const who = m[2].split(" ").pop();   // 去掉队伍前缀，只留登录名
 		if (COMPANIONS.has(who)) companionChat(who, m[3]);
 		else if (who !== SELF) emit("聊天", `${who}: ${m[3]}`);
-		else remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（快速反应层说的，思维层托它说的也在里面），思维层回顾时要看到前后文
+		else remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（快速反应层说的，决策脑托它说的也在里面），决策脑回顾时要看到前后文
 	} else if ((m = msg.match(RE_SUMMON))) {
 		emit("召唤", `${m[1]} 用召唤命令把你传送到了身边`);
 	} else if ((m = msg.match(RE_LOGOUT))) {
@@ -208,8 +221,8 @@ function handleLog(line) {
 	} else if (RE_ADV.test(msg)) {
 		emit("成就", msg);
 	} else if ((m = msg.match(RE_DEATH))) {
-		// 自己死了两层都要知道：快的那一面喊一声，慢的那一面重新打算（东西掉了、人在访客小屋）
-		emit("死亡", msg, m[1] === SELF ? [FAST, MIND] : ROUTES.死亡);
+		// 自己死了三层都要知道：嘴巴喊一声，执行脑手上的活断了，决策脑重新打算（东西掉了、人回到出生点）
+		emit("死亡", msg, m[1] === SELF ? [FAST, EXEC, MIND] : ROUTES.死亡);
 	}
 }
 
@@ -220,7 +233,7 @@ function ssh(command) {
 function refreshOnline() {
 	return new Promise(resolve => {
 		let out = "";
-		const p = ssh("mc list");
+		const p = ssh(`MC_SIDE=${SIDE} mc list`);
 		p.stdout.on("data", d => (out += d));
 		p.on("close", () => {
 			const m = [...out.matchAll(/players online:(.*)/g)].pop();
@@ -238,13 +251,21 @@ function refreshOnline() {
 	});
 }
 
+// 听不到服务器（断线，或者开着的不是要连的服）时每 10 秒再试一次；“听不到了”只说一次，重新听到再说
+let deaf = false;
 async function follow() {
 	await refreshOnline();
-	console.log(`${ts()} 已连上服务器日志，${onlineText()}`);
-	const p = journal = ssh("journalctl -u minecraft -f -n 0 -o cat");
+	const p = journal = ssh(`mc-active log ${SIDE}`);
 	createInterface({ input: p.stdout }).on("line", handleLog);
+	// 连上 5 秒还没断，就算听到了（开着的不是要连的服时 mc-active 马上就退出）
+	const heard = setTimeout(() => {
+		console.log(`${ts()} 已连上服务器日志，${onlineText()}`);
+		deaf = false;
+	}, 5000);
 	p.on("close", () => {
-		emit("断线", "暂时听不到服务器了，10 秒后重连");
+		clearTimeout(heard);
+		if (!deaf) emit("断线", `暂时听不到服务器了${SIDE ? `（要连的是${SIDE === "test" ? "测试服" : "正式服"}）` : ""}，10 秒后重连`);
+		deaf = true;
 		setTimeout(follow, 10000);
 	});
 }
@@ -256,15 +277,16 @@ function handleFrame(socket, buf) {
 	else if (len === 127) { len = Number(buf.readBigUInt64BE(2)); off = 10; }
 	const mask = buf.subarray(off, off + 4);
 	const data = Buffer.from(buf.subarray(off + 4, off + 4 + len)).map((b, i) => b ^ mask[i % 4]);
-	if (op === 0x8) { socket.end(Buffer.from([0x88, 0x00])); clients[FAST].delete(socket); clients[MIND].delete(socket); }
+	if (op === 0x8) { socket.end(Buffer.from([0x88, 0x00])); for (const set of Object.values(clients)) set.delete(socket); }
 	else if (op === 0x9 && data.length < 126) socket.write(Buffer.concat([Buffer.from([0x8a, data.length]), data]));
 }
 
 // 小克的 MCP（身体）发来的消息：后台长活结束了（进展）、她给自己定的提醒到了（提醒）、有人扔东西给她（礼物）、下雨雨停（天气）、
-// 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给思维层的事（记下）、思维层托快速反应层说的话（转告）、开始 / 结束忙
+// 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给决策脑的事（记下）、决策脑托快速反应层说的话（转告）、
+// 决策脑派给执行脑的活（任务）、执行脑回报决策脑（汇报）、开始 / 结束忙
 function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
+	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "任务", "汇报", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
@@ -309,7 +331,8 @@ const http = createServer((req, res) => {
 http.on("upgrade", (req, socket) => {
 	const key = req.headers["sec-websocket-key"];
 	if (!key) return socket.destroy();
-	const layer = (req.url ?? "/").startsWith("/mind") ? MIND : FAST;
+	const path = req.url ?? "/";
+	const layer = path.startsWith("/mind") ? MIND : path.startsWith("/exec") ? EXEC : FAST;
 	const accept = createHash("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
 	socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
 	socket.setNoDelay(true);
@@ -317,11 +340,11 @@ http.on("upgrade", (req, socket) => {
 	socket.on("close", () => clients[layer].delete(socket));
 	socket.on("error", () => clients[layer].delete(socket));
 	clients[layer].add(socket);
-	console.log(`${ts()} ${layer === MIND ? "思维层" : "快速反应层"}开始听了`);
+	console.log(`${ts()} ${NAMES[layer]}开始听了`);
 	socket.write(frame(`${ts()} [开始监听] ${onlineText()}`));
 	const queued = pending[layer].splice(0);
 	for (const line of queued) socket.write(frame(line));
-	if (layer === MIND && queued.length) mindStarted();
+	if (layer !== FAST && queued.length) turnStarted(layer);
 });
 http.on("error", e => {
 	if (e.code === "EADDRINUSE") { console.log(`端口 ${PORT} 已被占用，应该已经有一个耳朵在运行了`); process.exit(0); }
@@ -330,14 +353,14 @@ http.on("error", e => {
 http.listen(PORT, "127.0.0.1", () => {
 	mkdirSync("logs", { recursive: true });
 	writeFileSync("logs/ear.pid", String(process.pid));
-	console.log(`${ts()} ${NICK}（${SELF}）的耳朵在 ws://127.0.0.1:${PORT}/fast 和 /mind 等着${COMPANIONS.size ? `，AI 同伴：${[...COMPANIONS].join(" ")}` : ""}`);
+	console.log(`${ts()} ${NICK}（${SELF}）的耳朵在 ws://127.0.0.1:${PORT}/fast、/exec 和 /mind 等着${COMPANIONS.size ? `，AI 同伴：${[...COMPANIONS].join(" ")}` : ""}`);
 	follow();
 	checkWorldFx();
 });
 process.on("exit", () => { journal?.kill(); consoleWriter?.kill(); });
 
 // ---- 让别人看见、听见她：气泡、猫叫、粒子 ----
-// 通过一根一直开着的 ssh 把命令写进服务器控制台（/run/minecraft.stdin）。
+// 通过一根一直开着的 ssh 把命令写进开着的那个服的控制台（mc-active console）。
 // 控制台执行的命令默认会以“[Server: ...]”的样子发给在线的管理员，所以要先在 server.properties 里设 broadcast-console-to-ops=false 并重启服务器；
 // 启动时检查这一点和数据包 xiaoke_fx 在不在，不满足就不发（XIAOKE_FX=on 强制打开，XIAOKE_FX=off 关掉）
 let fxEnabled = false;
@@ -349,10 +372,10 @@ function checkWorldFx() {
 	if (process.env.XIAOKE_FX === "on") { fxEnabled = true; console.log(`${ts()} 气泡、声音、粒子开着（XIAOKE_FX=on，没检查服务器）`); return; }
 	// server.properties 改了以后要重启过才算数。服务器启动时自己会把它重写一遍，所以启动后两分钟内写的也算
 	const check = [
-		`cd ${SERVER_DIR}`,
+		`d=${SERVER_DIR} && [ -n "$d" ] && cd "$d" || { echo side; exit; }`,
 		`grep -q '^broadcast-console-to-ops=false' server.properties || { echo props; exit; }`,
 		`test -f world/datapacks/xiaoke_fx/pack.mcmeta || { echo pack; exit; }`,
-		`pid=$(systemctl show -p MainPID --value minecraft)`,
+		`pid=$(systemctl show -p MainPID --value $(mc-active unit ${SIDE}))`,
 		`[ "$(stat -c %Y server.properties)" -lt "$(( $(date -d "$(ps -o lstart= -p $pid)" +%s) + 120 ))" ] || { echo restart; exit; }`,
 		`echo ok`,
 	].join("; ");
@@ -360,7 +383,7 @@ function checkWorldFx() {
 	const p = ssh(check);
 	p.stdout.on("data", d => (out += d));
 	p.on("close", () => {
-		const why = { props: "server.properties 里还没有 broadcast-console-to-ops=false（不然管理员会在聊天里看到一串 [Server: ...]）", pack: "服务器上还没装数据包 xiaoke_fx", restart: "改了 server.properties 以后服务器还没重启" }[out.trim()];
+		const why = { props: "server.properties 里还没有 broadcast-console-to-ops=false（不然管理员会在聊天里看到一串 [Server: ...]）", pack: "服务器上还没装数据包 xiaoke_fx", restart: "改了 server.properties 以后服务器还没重启", side: `现在开着的不是要连的服（${SIDE}）` }[out.trim()];
 		fxEnabled = out.trim() === "ok";
 		console.log(`${ts()} ${fxEnabled ? "气泡、声音、粒子开着" : `气泡、声音、粒子先关着：${why ?? `检查不了服务器（${out.trim() || "ssh 没有输出"}）`}`}`);
 	});
@@ -368,7 +391,7 @@ function checkWorldFx() {
 
 function writeConsole(line) {
 	if (!consoleWriter) {
-		consoleWriter = spawn(SSH, [...SSH_OPTS, SERVER, "cat > /run/minecraft.stdin"], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+		consoleWriter = spawn(SSH, [...SSH_OPTS, SERVER, `mc-active console ${SIDE}`], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
 		consoleWriter.on("close", () => { consoleWriter = null; });
 		consoleWriter.stdin.on("error", () => { consoleWriter = null; });
 	}
@@ -385,7 +408,7 @@ function worldEffect(effect) {
 	if (!line) return false;
 	fxTimes.push(now);
 	writeConsole(line);
-	// 她自己嘀咕的话也是她的一部分：记进窗口日志，思维层回顾时也能看到
+	// 她自己嘀咕的话也是她的一部分：记进窗口日志，决策脑回顾时也能看到
 	if (effect.kind === "bubble" && effect.style === "murmur") {
 		const text = cleanText(effect.text);
 		console.log(`${ts()} [嘀咕] ${text}`);
@@ -394,7 +417,7 @@ function worldEffect(effect) {
 	return true;
 }
 
-// 快速反应层那边一直在跟人打交道，思维层好一阵没被叫醒：叫它回顾一下，看看有没有要记下、要改打算的
+// 快速反应层那边一直在跟人打交道，决策脑好一阵没被叫醒：叫它回顾一下，看看有没有要记下、要改打算的
 setInterval(() => {
 	if (!digest.length || !clients[MIND].size || Date.now() - lastMindAt < REVIEW_MS) return;
 	emit("回顾", "这段时间嘴巴那边一直在跟人打交道。看看有没有要记下来、要改打算的；别人的话嘴巴那边已经回过了，你不用再回");
