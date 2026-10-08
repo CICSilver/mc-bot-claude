@@ -34,9 +34,7 @@
       "ExitWorktree",
       "RemoteTrigger",
       "Read(~/.ssh/**)",
-      "Read(~/.claude/**)",
-      "Edit(./memory/**)",
-      "Write(./memory/**)"
+      "Read(~/.claude/**)"
     ]
   }
 }
