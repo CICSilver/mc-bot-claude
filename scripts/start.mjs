@@ -9,7 +9,7 @@
 //      node scripts/start.mjs --mind / --exec [--continue]   第 3、4 步自动调用的，不用手动跑
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildLayerPrompt, MANUAL_DIR, REFERENCE_DIR } from "./prompt.mjs";
@@ -83,11 +83,21 @@ const HOME = resolve(process.env.XIAOKE_HOME || CONFIG.home || ".");
 mkdirSync("logs", { recursive: true });
 mkdirSync(HOME, { recursive: true });
 
+// 整个文件夹拷过去。不用 fs.cpSync：Node 22 以后它在 Windows 上碰到中文路径，会建出一个乱码名字的文件夹，然后整个进程不报错直接退出
+function copyDir(from, to) {
+	mkdirSync(to, { recursive: true });
+	for (const entry of readdirSync(from, { withFileTypes: true })) {
+		const src = join(from, entry.name), dst = join(to, entry.name);
+		if (entry.isDirectory()) copyDir(src, dst);
+		else copyFileSync(src, dst);
+	}
+}
+
 // home 里还没有记忆（第一次用这个 home，比如测试版的 test-home）：从 memory-blank 的空白记忆开始。
 // 已经有了就接着用，不会清掉；想让测试版从头来过，删掉 home 里的 memory 和 state 两个文件夹再启动
 function seedMemory() {
 	if (existsSync(join(HOME, "memory"))) return;
-	cpSync("memory-blank", join(HOME, "memory"), { recursive: true });
+	copyDir("memory-blank", join(HOME, "memory"));
 	for (const name of readdirSync(join(HOME, "memory"))) {
 		const file = join(HOME, "memory", name);
 		if (name.endsWith(".md")) writeFileSync(file, fill(readFileSync(file, "utf8")));
@@ -230,7 +240,7 @@ if (layer !== "fast") {
 	if (HOME !== resolve(ROOT)) {
 		for (const [from, to] of [[MANUAL_DIR, "手册"], [REFERENCE_DIR, "参考"]]) {
 			rmSync(join(HOME, to), { recursive: true, force: true });
-			if (existsSync(from)) cpSync(from, join(HOME, to), { recursive: true });
+			if (existsSync(from)) copyDir(from, join(HOME, to));
 		}
 		manualPath = "手册";
 		referencePath = "参考";
