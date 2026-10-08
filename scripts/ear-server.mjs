@@ -55,6 +55,8 @@ const ROUTES = {
 	危险: [FAST, MIND], 断线: [FAST, MIND],
 	// 身体看到的：思维层在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
 	琢磨: [FAST], 闲聊: [FAST],
+	// 思维层想好了要说的话：聊天框里只有快速反应层一张嘴，托它说出口
+	转告: [FAST],
 	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
 	互动: [FAST], 看见: [FAST], 游戏: [FAST],
 	进展: [MIND], 提醒: [MIND], 空闲: [MIND], 天气: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
@@ -120,7 +122,7 @@ function takeDigest() {
 
 async function withSnapshot(line) {
 	try {
-		const res = await fetch(`${BODY_URL}/snapshot?for=fast`, { signal: AbortSignal.timeout(800) });
+		const res = await fetch(`${BODY_URL}/snapshot`, { signal: AbortSignal.timeout(800) });
 		if (res.ok) return `${line}　${await res.text()}`;
 	} catch {
 		// 身体还没起来或者卡住了，就只发事件本身
@@ -130,13 +132,15 @@ async function withSnapshot(line) {
 
 // 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进思维层要看的“这段时间”
 const NUDGES = new Set(["琢磨", "闲聊"]);
+// 思维层自己托出去的话，不用再给它看一遍；快速反应层真说出口的那句会以“你: ……”出现在“这段时间”里
+const FROM_MIND = new Set(["转告"]);
 
 function emit(kind, body, to = ROUTES[kind]) {
 	if (NUDGES.has(kind) && !clients[FAST].size) return;
 	const line = `${ts()} [${kind}] ${body}`;
 	console.log(`${line}  → ${to.join("+")}`);
 	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
-	else if (!NUDGES.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
+	else if (!NUDGES.has(kind) && !FROM_MIND.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
 	if (to.includes(FAST)) fastQueue = fastQueue.then(() => withSnapshot(line)).then(text => deliver(FAST, text)).catch(e => console.log(`${ts()} 发给快速反应层失败：${e}`));
 }
 
@@ -187,7 +191,7 @@ function handleLog(line) {
 		const who = m[2].split(" ").pop();   // 去掉队伍前缀，只留登录名
 		if (COMPANIONS.has(who)) companionChat(who, m[3]);
 		else if (who !== SELF) emit("聊天", `${who}: ${m[3]}`);
-		else remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（两层都可能说），思维层回顾时要看到前后文
+		else remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（快速反应层说的，思维层托它说的也在里面），思维层回顾时要看到前后文
 	} else if ((m = msg.match(RE_SUMMON))) {
 		emit("召唤", `${m[1]} 用召唤命令把你传送到了身边`);
 	} else if ((m = msg.match(RE_LOGOUT))) {
@@ -257,10 +261,10 @@ function handleFrame(socket, buf) {
 }
 
 // 小克的 MCP（身体）发来的消息：后台长活结束了（进展）、她给自己定的提醒到了（提醒）、有人扔东西给她（礼物）、下雨雨停（天气）、
-// 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给思维层的事（记下）、开始 / 结束忙
+// 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给思维层的事（记下）、思维层托快速反应层说的话（转告）、开始 / 结束忙
 function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
+	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
