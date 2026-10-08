@@ -1,11 +1,12 @@
-// 小克的启动器。小克的脑子分成一快一慢两层，连着同一个身体：
-//   1. 身体：旁边的 Minecraft MCP 以 HTTP 方式常驻（--http-port），两层脑子连同一个机器人
-//   2. 耳朵：scripts/ear-server.mjs，把世界里的动静分给两层
-//   3. 思维层：另开一个窗口。默认 Opus 5.5 + xhigh，慢慢想：打算、图纸、长活、记忆、下线
-//   4. 快速反应层：就在这个窗口。默认 Sonnet 5.5 + medium，嘴巴和小动作；在这个窗口里打字，就是坐在电脑前的你在跟小克说话
+// 小克的启动器。小克的脑子分成三层，连着同一个身体：
+//   1. 身体：旁边的 Minecraft MCP 以 HTTP 方式常驻（--http-port），三层脑子连同一个机器人
+//   2. 耳朵：scripts/ear-server.mjs，把世界里的动静分给三层
+//   3. 决策脑：另开一个窗口。默认 Opus 5.5 + xhigh：定打算、重要取舍、设计图纸、掂量请求、整理记忆、下线
+//   4. 执行脑：另开一个窗口。默认 Sonnet 5.5 + low：把决策脑派的活做成，自己安排步骤、处理普通的麻烦
+//   5. 快速反应层：就在这个窗口。默认 Sonnet 5.5 + medium，聊天、社交、即时反应；在这个窗口里打字，就是坐在电脑前的你在跟小克说话
 // 关掉任何一个窗口（或者小克自己 logout），其它的都跟着收掉。
-// 用法：node scripts/start.mjs [--continue 接着上次的两段对话] [其它给快速反应层的 claude 参数]
-//      node scripts/start.mjs --mind [--continue]   第 3 步自动调用的，不用手动跑
+// 用法：node scripts/start.mjs [--continue 接着上次的三段对话] [其它给快速反应层的 claude 参数]
+//      node scripts/start.mjs --mind / --exec [--continue]   第 3、4 步自动调用的，不用手动跑
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -20,7 +21,7 @@ process.chdir(ROOT);
 // 身体和小克这个人的配置：登录名、端口、记忆放在哪。路径相对本目录写，换台电脑也能用
 const CONFIG = JSON.parse(readFileSync("config/xiaoke-body.json", "utf8"));
 
-// 换模型、思考强度用环境变量，比如 set XIAOKE_MIND_EFFORT=high
+// 换模型、思考强度用环境变量，比如 set XIAOKE_MIND_EFFORT=high、set XIAOKE_EXEC_EFFORT=medium
 const LAYERS = {
 	fast: {
 		name: "快速反应层",
@@ -28,24 +29,32 @@ const LAYERS = {
 		effort: process.env.XIAOKE_FAST_EFFORT || "medium",
 		wake: "你是反应快的那一面",
 	},
+	exec: {
+		name: "执行脑",
+		model: process.env.XIAOKE_EXEC_MODEL || "claude-sonnet-5-5",
+		effort: process.env.XIAOKE_EXEC_EFFORT || "low",
+		wake: "你是动手做事的那一面",
+	},
 	mind: {
-		name: "思维层",
+		name: "决策脑",
 		model: process.env.XIAOKE_MIND_MODEL || "claude-opus-5-5",
 		effort: process.env.XIAOKE_MIND_EFFORT || "xhigh",
-		wake: "你是慢慢想的那一面",
+		wake: "你是拿主意的那一面",
 	},
 };
+// 另开窗口的两层，各记一个进程号
+const SIDE_LAYERS = ["mind", "exec"];
+const pidFile = name => join(ROOT, "logs", `${name}.pid`);
 const EAR_PORT = Number(CONFIG.earPort) || 25599;
 const BODY_PORT = Number(process.env.XIAOKE_BODY_PORT) || Number(CONFIG.bodyPort) || 25598;
 const BODY_URL = `http://127.0.0.1:${BODY_PORT}`;
 const LOGOUT_FLAG = join(ROOT, "logs", "logout.flag");
-const MIND_PID = join(ROOT, "logs", "mind.pid");
 const SESSIONS = join(ROOT, "logs", "sessions.json");
 
 const argv = process.argv.slice(2);
-const layer = argv.includes("--mind") ? "mind" : "fast";
+const layer = argv.includes("--mind") ? "mind" : argv.includes("--exec") ? "exec" : "fast";
 const resume = argv.includes("--continue") || argv.includes("-c");
-const extraArgs = argv.filter(a => !["--mind", "--continue", "-c"].includes(a));
+const extraArgs = argv.filter(a => !["--mind", "--exec", "--continue", "-c"].includes(a));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 process.title = `小克 · ${LAYERS[layer].name}`;
@@ -95,8 +104,8 @@ const claudeEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) 
 // 工具一开始就全部给她，免得每次还要先用 ToolSearch 找工具，多绕一圈
 claudeEnv.ENABLE_TOOL_SEARCH = "false";
 
-// 两层各自一段对话。--continue 时接着各自上次那段（同一个目录里 claude 自己的 --continue 只认最近的一段，会接错层）。
-// 由快速反应层的启动器一次定好两层的，思维层的通过环境变量 XIAOKE_MIND_SESSION 带过去
+// 三层各自一段对话。--continue 时接着各自上次那段（同一个目录里 claude 自己的 --continue 只认最近的一段，会接错层）。
+// 由快速反应层的启动器一次定好三层的，另两层的通过环境变量 XIAOKE_SESSION 带过去
 function planSessions() {
 	let saved = {};
 	try { saved = JSON.parse(readFileSync(SESSIONS, "utf8")); } catch { /* 第一次启动 */ }
@@ -108,7 +117,7 @@ function planSessions() {
 	writeFileSync(SESSIONS, JSON.stringify(saved, null, 2));
 	return plan;
 }
-const sessions = layer === "fast" ? planSessions() : { mind: process.env.XIAOKE_MIND_SESSION ?? `--session-id ${randomUUID()}` };
+const sessions = layer === "fast" ? planSessions() : { [layer]: process.env.XIAOKE_SESSION ?? `--session-id ${randomUUID()}` };
 const sessionArgs = () => sessions[layer].split(" ");
 
 function runClaude() {
@@ -121,7 +130,7 @@ function runClaude() {
 		"--mcp-config", join(ROOT, "logs", `mcp-${layer}.json`),           // 只连身体上这一层能用的那些工具
 		"--strict-mcp-config",                                             // 只加载 Minecraft 这一个 MCP，账号里的其它连接器一律不给
 		"--setting-sources", "project",                                    // 不读用户级的全局设置
-		"--settings", join(ROOT, "logs", `settings-${layer}.json`),        // 这一层的权限（config/xiaoke-*-settings.json，思维层另加 hook），不影响在本目录开的普通会话
+		"--settings", join(ROOT, "logs", `settings-${layer}.json`),        // 这一层的权限（config/xiaoke-*-settings.json，决策脑和执行脑另加 hook），不影响在本目录开的普通会话
 		"--permission-mode", "dontAsk",                                    // 允许列表以外的操作全部自动拒绝
 		"--disable-slash-commands",                                        // 不加载各种技能，小克用不上
 		...sessionArgs(),
@@ -135,16 +144,16 @@ function runClaude() {
 
 process.on("SIGINT", () => {});   // Ctrl+C 留给 Claude Code 自己处理
 
-if (layer === "mind") {
-	// ---- 思维层的窗口：跟着快速反应层的启动器走 ----
+if (layer !== "fast") {
+	// ---- 决策脑、执行脑的窗口：跟着快速反应层的启动器走 ----
 	const parent = Number(process.env.XIAOKE_LAUNCHER_PID);
-	writeFileSync(MIND_PID, String(process.pid));
+	writeFileSync(pidFile(layer), String(process.pid));
 	const claude = runClaude();
 	let parentGone = false;
 	const stop = async code => {
-		rmSync(MIND_PID, { force: true });
+		rmSync(pidFile(layer), { force: true });
 		// 这个窗口一退出就关了，出错的话留几秒让人看清楚
-		if (code && !parentGone) { console.error(`\n思维层退出了（代码 ${code}），10 秒后关窗口。`); await sleep(10000); }
+		if (code && !parentGone) { console.error(`\n${LAYERS[layer].name}退出了（代码 ${code}），10 秒后关窗口。`); await sleep(10000); }
 		process.exit(code ?? 0);
 	};
 	setInterval(() => {
@@ -153,7 +162,7 @@ if (layer === "mind") {
 	claude.on("exit", stop);
 	claude.on("error", e => { console.error("启动 claude 失败：", e.message); stop(1); });
 } else {
-	// ---- 快速反应层的窗口：先把身体、耳朵、思维层都安排好 ----
+	// ---- 快速反应层的窗口：先把身体、耳朵、另外两层都安排好 ----
 	const mcpMain = resolve(CONFIG.mcp, "dist", "main.js");
 	if (!existsSync(mcpMain)) {
 		console.error(`找不到 ${mcpMain}，先在 ${resolve(CONFIG.mcp)} 里运行 npm install 和 npm run build。`);
@@ -216,7 +225,7 @@ if (layer === "mind") {
 	const testBot = CONFIG.datapackTriggers === false;
 	// 盖房子的参考里新放进来的建筑文件：先补上预览图和材料表
 	await refreshReferences(line => console.log(line));
-	// 两层在 home 里跑，只读得到 home 里的文件。home 不是本目录（比如测试号的 test-home）时，把手册和参考拷一份进去，每次启动都换成最新的
+	// 三层在 home 里跑，只读得到 home 里的文件。home 不是本目录（比如测试号的 test-home）时，把手册和参考拷一份进去，每次启动都换成最新的
 	let manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR;
 	if (HOME !== resolve(ROOT)) {
 		for (const [from, to] of [[MANUAL_DIR, "手册"], [REFERENCE_DIR, "参考"]]) {
@@ -227,31 +236,37 @@ if (layer === "mind") {
 		referencePath = "参考";
 	}
 	const promptWarnings = new Set();
-	// 思维层的一轮什么时候开始、调了什么工具、什么时候结束，由 Claude Code 的 hook 直接告诉身体：身体据此知道她是不是在深想
-	const hook = [{ hooks: [{ type: "http", url: `${BODY_URL}/hook` }] }];
-	const anyTool = [{ matcher: "*", hooks: hook[0].hooks }];
+	// 决策脑、执行脑的一轮什么时候开始、调了什么工具、什么时候结束，由 Claude Code 的 hook 直接告诉身体：
+	// 决策脑的用来看她是不是在深想；执行脑的用来在它想下一步时，身体别自己把暂停的活接着做
+	const hooksFor = name => {
+		const hook = [{ hooks: [{ type: "http", url: `${BODY_URL}/hook${name === "exec" ? "?layer=exec" : ""}` }] }];
+		const anyTool = [{ matcher: "*", hooks: hook[0].hooks }];
+		return { UserPromptSubmit: hook, PreToolUse: anyTool, PostToolUse: anyTool, Stop: hook };
+	};
 	for (const name of Object.keys(LAYERS)) {
 		const prompt = buildLayerPrompt(name, { testBot, manualPath, referencePath });
 		for (const warning of prompt.warnings) if (!promptWarnings.has(warning)) { promptWarnings.add(warning); console.warn(`设定检查：${warning}`); }
 		writeFileSync(`logs/prompt-${name}.md`, fill(prompt.text));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
 		const settings = JSON.parse(readFileSync(`config/xiaoke-${name}-settings.json`, "utf8"));
-		if (name === "mind") settings.hooks = { UserPromptSubmit: hook, PreToolUse: anyTool, PostToolUse: anyTool, Stop: hook };
+		if (SIDE_LAYERS.includes(name)) settings.hooks = hooksFor(name);
 		writeFileSync(`logs/settings-${name}.json`, JSON.stringify(settings, null, 2));
 	}
 
-	// 思维层另开一个窗口（start 会给它一个新的控制台）
-	rmSync(MIND_PID, { force: true });
+	// 决策脑、执行脑各开一个窗口（start 会给它们新的控制台）
 	rmSync(LOGOUT_FLAG, { force: true });
-	spawn("cmd.exe", ["/d", "/c", `start "xiaoke-mind" "${process.execPath}" "${join(ROOT, "scripts", "start.mjs")}" --mind`], {
-		windowsVerbatimArguments: true, stdio: "ignore", windowsHide: true,
-		env: { ...process.env, XIAOKE_LAUNCHER_PID: String(process.pid), XIAOKE_MIND_SESSION: sessions.mind },
-	});
+	for (const name of SIDE_LAYERS) {
+		rmSync(pidFile(name), { force: true });
+		spawn("cmd.exe", ["/d", "/c", `start "xiaoke-${name}" "${process.execPath}" "${join(ROOT, "scripts", "start.mjs")}" --${name}`], {
+			windowsVerbatimArguments: true, stdio: "ignore", windowsHide: true,
+			env: { ...process.env, XIAOKE_LAUNCHER_PID: String(process.pid), XIAOKE_SESSION: sessions[name] },
+		});
+	}
 
 	const claude = runClaude();
 	let closing = false;
 	const stop = code => { clearInterval(watch); ear.kill(); process.exit(code ?? 0); };
-	let mindPid = 0;
+	const sidePid = {};
 	const startedAt = Date.now();
 	const watch = setInterval(() => {
 		if (closing) return;
@@ -262,16 +277,21 @@ if (layer === "mind") {
 			setTimeout(() => claude.kill(), 3000);
 			return;
 		}
-		// 思维层的窗口被关掉了：小克只剩一半脑子，干脆一起下线
-		if (!mindPid && existsSync(MIND_PID)) mindPid = Number(readFileSync(MIND_PID, "utf8")) || 0;
-		if (mindPid && !alive(mindPid)) {
-			closing = true;
-			console.log("\n思维层的窗口关掉了，小克一起下线。");
-			claude.kill();
-		} else if (!mindPid && Date.now() - startedAt > 30000) {
-			closing = true;
-			console.log("\n思维层的窗口没能打开，先关掉。");
-			claude.kill();
+		// 决策脑或执行脑的窗口被关掉了：小克少了一部分脑子，干脆一起下线（另一个窗口看到启动器没了也会自己关）
+		for (const name of SIDE_LAYERS) {
+			if (!sidePid[name] && existsSync(pidFile(name))) sidePid[name] = Number(readFileSync(pidFile(name), "utf8")) || 0;
+			if (sidePid[name] && !alive(sidePid[name])) {
+				closing = true;
+				console.log(`\n${LAYERS[name].name}的窗口关掉了，小克一起下线。`);
+				claude.kill();
+				return;
+			}
+			if (!sidePid[name] && Date.now() - startedAt > 30000) {
+				closing = true;
+				console.log(`\n${LAYERS[name].name}的窗口没能打开，先关掉。`);
+				claude.kill();
+				return;
+			}
 		}
 	}, 1000);
 	claude.on("exit", stop);
