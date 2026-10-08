@@ -2,7 +2,7 @@
 // 这个脚本给有建筑文件的参考补上两张预览图（东南.png、西北.png，方块按名字粗略上色）和一份 材料.md（用了哪些方块、各多少），
 // 建筑文件比预览新的时候重画。思维层只看预览图、灵感卡和材料，不拿整栋的图纸，免得照着原样盖。
 // 用法：node scripts/references.mjs        启动器每次启动也会调用一次
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -166,10 +166,19 @@ export async function refreshReferences(log = console.log) {
 		try {
 			nbt ??= loadNbt();
 			const w = await loadBuild(nbt, source);
-			writeFileSync(outputs[0], render(w, "se"));
-			writeFileSync(outputs[1], render(w, "nw"));
-			writeFileSync(outputs[2], materials(w, build));
-			log(`参考《${name}》：画好了预览图，统计了材料`);
+			// 内容没变就不写（只碰一下修改时间）：git 切分支会刷新文件的修改时间，不然每次都重写一遍、换行符一变，仓库里就显示改过了
+			let changed = false;
+			const put = (file, data) => {
+				const same = existsSync(file) && (typeof data === "string"
+					? readFileSync(file, "utf8").replace(/\r\n/g, "\n") === data
+					: readFileSync(file).equals(data));
+				if (same) { const now = new Date(); utimesSync(file, now, now); }
+				else { writeFileSync(file, data); changed = true; }
+			};
+			put(outputs[0], render(w, "se"));
+			put(outputs[1], render(w, "nw"));
+			put(outputs[2], materials(w, build));
+			if (changed) log(`参考《${name}》：画好了预览图，统计了材料`);
 		} catch (e) {
 			log(`参考《${name}》：读不了 ${build}（${e.message}）`);
 		}
