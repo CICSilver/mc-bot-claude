@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildLayerPrompt } from "./prompt.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -209,15 +210,17 @@ if (layer === "mind") {
 		process.exit(1);
 	}
 
-	// 每层的设定 = 共用的人设和世界（persona.md）+ 这一层自己的规则；每层只连身体上自己的那个地址。
-	// 服务器数据包的 /trigger 只认正式的登录名，测试版（datapackTriggers: false）另加一段说明
-	let persona = readFileSync("prompts/persona.md", "utf8").trimEnd();
-	if (CONFIG.datapackTriggers === false) persona += `\n\n${readFileSync("prompts/no-triggers.md", "utf8").trimEnd()}`;
+	// 每层的设定由 scripts/prompt.mjs 拼：她自己（prompts/小克/）+ 世界和身体的规则（prompts/系统/）+ 这一层自己的规则；每层只连身体上自己的那个地址。
+	// 服务器数据包的 /trigger 只认正式的登录名，测试版（datapackTriggers: false）另加一段说明。检查出对不上的地方只提醒，不拦着启动
+	const testBot = CONFIG.datapackTriggers === false;
+	const promptWarnings = new Set();
 	// 思维层的一轮什么时候开始、调了什么工具、什么时候结束，由 Claude Code 的 hook 直接告诉身体：身体据此知道她是不是在深想
 	const hook = [{ hooks: [{ type: "http", url: `${BODY_URL}/hook` }] }];
 	const anyTool = [{ matcher: "*", hooks: hook[0].hooks }];
 	for (const name of Object.keys(LAYERS)) {
-		writeFileSync(`logs/prompt-${name}.md`, fill(`${persona}\n\n---\n\n${readFileSync(`prompts/${name}.md`, "utf8")}`));
+		const prompt = buildLayerPrompt(name, { testBot });
+		for (const warning of prompt.warnings) if (!promptWarnings.has(warning)) { promptWarnings.add(warning); console.warn(`设定检查：${warning}`); }
+		writeFileSync(`logs/prompt-${name}.md`, fill(prompt.text));
 		writeFileSync(`logs/mcp-${name}.json`, JSON.stringify({ mcpServers: { minecraft: { type: "http", url: `${BODY_URL}/mcp/${name}` } } }, null, 2));
 		const settings = JSON.parse(readFileSync(`config/xiaoke-${name}-settings.json`, "utf8"));
 		if (name === "mind") settings.hooks = { UserPromptSubmit: hook, PreToolUse: anyTool, PostToolUse: anyTool, Stop: hook };
