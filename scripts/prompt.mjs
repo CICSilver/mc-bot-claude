@@ -1,18 +1,23 @@
 // 把小克的设定拼成每一层的系统提示词，顺便检查几处容易对不上的地方：
-//   prompts/小克/人格.md、生活.md —— 她是谁、怎么过日子（主人自己维护，两层都看）
-//   prompts/系统/共用.md —— 世界、身体、两层分工、说话限制、好感度、安全（两层都看）
-//   prompts/系统/快.md、慢.md —— 这一层自己的规则；测试版.md —— 测试号另加的说明
-//   prompts/系统/手册/ —— 用到时再读的手册，目录只给慢的那一面（快的那一面读不了 prompts/）
-//   prompts/小克/参考/ —— 盖房子的参考（灵感卡、预览图，主人放进来的），目录也只给慢的那一面
+//   prompts/小克/人格.md、生活.md —— 她是谁、怎么过日子（主人自己维护）。快速反应层和决策脑看；执行脑只管把活做成，不带这两份，免得每走一步都重读
+//   prompts/系统/共用.md —— 世界、身体、三层分工、说话限制、好感度、安全（三层都看）
+//   prompts/系统/快.md、执行.md、决策.md —— 这一层自己的规则；测试版.md —— 测试号另加的说明
+//   prompts/系统/手册/ —— 用到时再读的手册，目录给执行脑和决策脑（快速反应层用不上）
+//   prompts/小克/参考/ —— 盖房子的参考（灵感卡、预览图，主人放进来的），目录只给决策脑
 // 启动器（scripts/start.mjs）每次启动都会调用；也可以单独运行看看拼出来的样子和检查结果：
-//   node scripts/prompt.mjs        → 写到 logs/prompt-fast.preview.md、logs/prompt-mind.preview.md，并列出检查结果
+//   node scripts/prompt.mjs        → 写到 logs/prompt-{fast,exec,mind}.preview.md，并列出检查结果
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MANUAL_DIR = "prompts/系统/手册";
-const LAYER_FILES = { fast: "prompts/系统/快.md", mind: "prompts/系统/慢.md" };
+const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/决策.md" };
+export const LAYER_NAMES = Object.keys(LAYER_FILES);
+// 哪一层带她自己的两份（人格、生活），哪一层有手册目录、参考目录
+const WITH_PERSONA = new Set(["fast", "mind"]);
+const WITH_MANUALS = new Set(["exec", "mind"]);
+const WITH_REFERENCES = new Set(["mind"]);
 const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n");
 // <!-- --> 里是写给维护的人看的说明，不给小克
 const stripComments = text => text.replace(/<!--[\s\S]*?-->\n?/g, "").trim();
@@ -66,7 +71,7 @@ function mcpToolNames() {
 	}
 }
 
-// layer: "fast" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明；
+// layer: "fast"、"exec" 或 "mind"；testBot: 测试号（服务器 /trigger 不认它），另加测试版说明；
 // manualPath / referencePath: 从小克的工作目录（记忆所在的 home）看，手册和参考在哪。home 不是本目录时，启动器会把它们拷一份过去
 export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR } = {}) {
 	const persona = stripComments(read("prompts/小克/人格.md"));
@@ -82,19 +87,20 @@ export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_D
 		const pictures = r.pictures.map(p => `${at}/${p}`).join("、");
 		return `- 《${r.name}》（灵感卡 ${at}/灵感.md${pictures ? `；图 ${pictures}` : ""}）：${r.when ?? "想找点子的时候"}`;
 	}).join("\n");
+	const intro = WITH_PERSONA.has(layer)
+		? "以下是小克的设定。第一部分是你自己：你是谁、什么性子、怎么说话、怎么过日子。第二部分是这个世界、你的身体和三层分工的规则，最后是你这一层（反应快的那一面，或者拿主意的那一面）自己的规则。\n" +
+		  "两部分说法对不上时：安全、传送、下线、工具、机制和三层分工上的限制，以第二部分为准；在这些限制之内想做什么、怎么做、做成什么样子，按第一部分你自己的性子来。"
+		: "以下是小克的设定：这个世界、你的身体和三层分工的规则，最后是你这一层（动手的那一面）自己的规则。";
 	const text = [
-		"以下是小克的设定。第一部分是你自己：你是谁、什么性子、怎么说话、怎么过日子。第二部分是这个世界、你的身体和两层分工的规则，最后是你这一层（反应快的那一面，或者慢慢想的那一面）自己的规则。\n" +
-		"两部分说法对不上时：安全、传送、下线、工具、机制和两层分工上的限制，以第二部分为准；在这些限制之内想做什么、怎么做、做成什么样子，按第一部分你自己的性子来。",
+		intro,
 		"---",
-		persona,
-		life,
-		"---",
+		...(WITH_PERSONA.has(layer) ? [persona, life, "---"] : []),
 		shared,
 		...(test ? [test] : []),
 		"---",
 		own,
-		...(layer === "mind" ? [`## 手册目录\n用 Read 读，路径照下面写：\n${index}`] : []),
-		...(layer === "mind" && referenceIndex ? [`## 盖房子的参考\n设计房子、院子之前挑两三份看看，借点子，别照着整栋盖。灵感卡和图都用 Read 看，路径照下面写：\n${referenceIndex}`] : []),
+		...(WITH_MANUALS.has(layer) ? [`## 手册目录\n用 Read 读，路径照下面写：\n${index}`] : []),
+		...(WITH_REFERENCES.has(layer) && referenceIndex ? [`## 盖房子的参考\n设计房子、院子之前挑两三份看看，借点子，别照着整栋盖。灵感卡和图都用 Read 看，路径照下面写：\n${referenceIndex}`] : []),
 	].join("\n\n") + "\n";
 
 	// 检查：手册都写了“什么时候读”；设定里提到的手册都存在；提到的工具 MCP 里都有
@@ -116,14 +122,14 @@ export function buildLayerPrompt(layer, { testBot = false, manualPath = MANUAL_D
 	return { text, manuals, references, warnings };
 }
 
-// 直接运行时：两层都拼出来看看
+// 直接运行时：三层都拼出来看看
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
 	mkdirSync(join(ROOT, "logs"), { recursive: true });
 	const seen = new Set();
-	for (const layer of ["fast", "mind"]) {
+	for (const layer of LAYER_NAMES) {
 		const { text, manuals, warnings } = buildLayerPrompt(layer, { testBot: process.argv.includes("--test") });
 		writeFileSync(join(ROOT, `logs/prompt-${layer}.preview.md`), text);
-		console.log(`拼好了 logs/prompt-${layer}.preview.md（${text.length} 个字）${layer === "mind" ? `，手册 ${manuals.length} 本：${manuals.map(m => m.title).join("、")}` : ""}`);
+		console.log(`拼好了 logs/prompt-${layer}.preview.md（${text.length} 个字）${WITH_MANUALS.has(layer) ? `，手册 ${manuals.length} 本` : ""}`);
 		for (const w of warnings) if (!seen.has(w)) { seen.add(w); console.log(`检查发现：${w}`); }
 	}
 	if (!seen.size) console.log("检查通过");
