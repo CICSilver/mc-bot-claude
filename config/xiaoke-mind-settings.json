@@ -5,7 +5,10 @@
       "mcp__minecraft",
       "Monitor",
       "Read(./memory/**)",
-      "Read(./prompts/**)",
+      "Read(./手册/**)",
+      "Read(./prompts/系统/手册/**)",
+      "Read(./参考/**)",
+      "Read(./prompts/小克/参考/**)",
       "Edit(./memory/**)"
     ],
     "deny": [
@@ -34,6 +37,7 @@
       "Edit(./prompts/**)",
       "Edit(./scripts/**)",
       "Edit(./config/**)",
+      "Edit(./state/**)",
       "Edit(./.claude/**)",
       "Edit(./.mcp.json)",
       "Edit(./start-xiaoke.cmd)",
