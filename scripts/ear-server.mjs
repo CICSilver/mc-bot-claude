@@ -23,6 +23,10 @@ const NICK = process.env.MC_BOT_NICK ?? "小克";
 const COMPANIONS = new Set((process.env.MC_COMPANIONS ?? "").split(",").map(s => s.trim()).filter(Boolean));
 const COMPANION_CHAT_MS = Number(process.env.COMPANION_CHAT_SECONDS ?? 60) * 1000;
 const isBot = who => who === SELF || COMPANIONS.has(who);
+// 她的名字：聊天里带上就是在叫她。昵称（测试号是“小克test”）、去掉 test 的、登录名都算
+const MY_NAMES = [...new Set([NICK, NICK.replace(/test$/i, ""), "小克", SELF, SELF.replace(/_test$/i, "")])].filter(n => n.length >= 2).map(n => n.toLowerCase());
+// 别人的别名（admin=CICSilver）：聊天里叫“admin”就是在跟 CICSilver 说
+const ALIASES = Object.fromEntries((process.env.MC_ALIASES ?? "").split(",").map(s => s.split("=").map(x => x.trim())).filter(p => p.length === 2 && p[0] && p[1]));
 // 有人在线、决策脑却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
 // 快速反应层那边的聊天不算决策脑的动静
 const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 60) * 1000;
@@ -77,6 +81,11 @@ const clients = { [FAST]: new Set(), [EXEC]: new Set(), [MIND]: new Set() };
 const pending = { [FAST]: [], [EXEC]: [], [MIND]: [] };   // 那一层没在听时攒下的事件，等它连上再一起给
 // 只叫醒了快速反应层的事（还有小克自己在聊天里说的话），攒着，下次叫醒决策脑时一起给它看
 const digest = [];
+// 旁边的人在聊、不是对她说的话：不叫醒谁，下次叫醒快速反应层时附在后面（3 分钟内的，最多 6 句），给过一次就清掉
+const overheard = [];
+// 谁在跟她说话、她什么时候回过：接着聊的判断用
+let lastAddressed = null;   // { who, at }
+let lastSaidAt = 0;
 let lastMindAt = Date.now();
 // 给快速反应层、执行脑的事件要先问身体要〔现在〕，各排一队免得顺序乱
 const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve() };
@@ -128,14 +137,60 @@ function takeDigest() {
 	return `　（这段时间嘴巴那边：${digest.splice(0).join(" ／ ")}）`;
 }
 
-async function withSnapshot(line) {
+async function withSnapshot(line, layer) {
+	let text = line;
+	if (layer === FAST) {
+		const recent = overheard.splice(0).filter(o => Date.now() - o.at < 180000).slice(-6).map(o => o.line);
+		if (recent.length) text += `　（刚才旁边的人在聊，不是对你说的：${recent.join(" ／ ")}）`;
+	}
 	try {
 		const res = await fetch(`${BODY_URL}/snapshot`, { signal: AbortSignal.timeout(800) });
-		if (res.ok) return `${line}　${await res.text()}`;
+		if (res.ok) return `${text}　${await res.text()}`;
 	} catch {
 		// 身体还没起来或者卡住了，就只发事件本身
 	}
-	return line;
+	return text;
+}
+
+// 一句话是不是在跟她说（10-09 用户：她跟朋友聊天时，她以为在跟她说话）。返回 { to: true/false, why }：
+// - 只有说话的人和她在线（AI 同伴也算别人）：都是跟她说
+// - 叫了她的名字：是
+// - 点了别的在线玩家的名字或者别名：不是，在跟那个人说
+// - 说话时（或者之前 3 秒内）在 16 格内看着她：是（打字的时候视角是定住的，看着谁多半就是跟谁说）
+// - 她 30 秒内刚回过这个人：接着聊，是
+// - 别的都当成在跟别人说话
+async function addressedToMe(who, text) {
+	const others = [...online].filter(n => n !== who).length + companionsOnline.size;
+	if (!others) return { to: true, why: "" };
+	const t = text.toLowerCase();
+	if (MY_NAMES.some(n => t.includes(n))) return { to: true, why: "" };
+	const named = [...online, ...companionsOnline].filter(n => n !== who && t.includes(n.toLowerCase()))
+		.concat(Object.entries(ALIASES).filter(([alias, real]) => real !== who && t.includes(alias.toLowerCase())).map(([, real]) => real));
+	if (named.length) return { to: false, why: `在跟 ${named[0]} 说` };
+	try {
+		const res = await fetch(`${BODY_URL}/gaze?who=${encodeURIComponent(who)}`, { signal: AbortSignal.timeout(800) });
+		const g = res.ok ? await res.json() : {};
+		if (typeof g.sinceMs === "number" && g.sinceMs <= 3000 && (g.distance ?? 99) <= 16) return { to: true, why: "看着你说的" };
+	} catch {
+		// 问不到身体就只看名字和接话
+	}
+	if (lastAddressed?.who === who && lastSaidAt > lastAddressed.at && Date.now() - lastSaidAt < 30000) return { to: true, why: "接着刚才跟你的话" };
+	return { to: false, why: "没叫你，也没看着你" };
+}
+let chatQueue = Promise.resolve();
+function visitorChat(who, text) {
+	chatQueue = chatQueue.then(async () => {
+		const { to, why } = await addressedToMe(who, text);
+		if (to) {
+			lastAddressed = { who, at: Date.now() };
+			emit("聊天", `${who}: ${text}${why ? `（${why}）` : ""}`);
+			return;
+		}
+		console.log(`${ts()} [旁听] ${who}: ${text}（${why}）`);
+		overheard.push({ at: Date.now(), line: `${who}: ${text}` });
+		if (overheard.length > 12) overheard.shift();
+		remember(`${ts().slice(6)} ${who}（${why}）: ${text}`);
+	}).catch(e => console.log(`${ts()} 分聊天出错：${e}`));
 }
 
 // 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进决策脑要看的“这段时间”
@@ -154,7 +209,7 @@ function emit(kind, body, to = ROUTES[kind]) {
 	else if (to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind) && !FAST_ONLY.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
 	for (const layer of [FAST, EXEC]) {
 		if (!to.includes(layer)) continue;
-		queues[layer] = queues[layer].then(() => withSnapshot(line)).then(text => deliver(layer, text)).catch(e => console.log(`${ts()} 发给${NAMES[layer]}失败：${e}`));
+		queues[layer] = queues[layer].then(() => withSnapshot(line, layer)).then(text => deliver(layer, text)).catch(e => console.log(`${ts()} 发给${NAMES[layer]}失败：${e}`));
 	}
 }
 
@@ -205,8 +260,11 @@ function handleLog(line) {
 	if ((m = msg.match(RE_CHAT))) {
 		const who = m[2].split(" ").pop();   // 去掉队伍前缀，只留登录名
 		if (COMPANIONS.has(who)) companionChat(who, m[3]);
-		else if (who !== SELF) emit("聊天", `${who}: ${m[3]}`);
-		else remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（快速反应层说的，决策脑托它说的也在里面），决策脑回顾时要看到前后文
+		else if (who !== SELF) visitorChat(who, m[3]);
+		else {
+			lastSaidAt = Date.now();
+			remember(`${ts().slice(6)} 你: ${m[3]}`);   // 自己说的话（快速反应层说的，决策脑托它说的也在里面），决策脑回顾时要看到前后文
+		}
 	} else if ((m = msg.match(RE_SUMMON))) {
 		emit("召唤", `${m[1]} 用召唤命令把你传送到了身边`);
 	} else if ((m = msg.match(RE_LOGOUT))) {
