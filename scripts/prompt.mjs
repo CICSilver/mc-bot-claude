@@ -48,6 +48,9 @@ function loadReferences() {
 			name,
 			hasCard: Boolean(card),
 			when: card.match(/^>\s*适合什么时候看[：:]\s*(.+)$/m)?.[1].trim(),
+			// 大点子（院子、景观、配色、形状这种）写在目录里，设计时不用一份份打开也能挑（第 3 步：让大点子更容易被用上）
+			big: card.match(/^>\s*大点子[：:]\s*(.+)$/m)?.[1].trim(),
+			tags: card.match(/^>\s*标签[：:]\s*(.+)$/m)?.[1].trim(),
 			pictures: files.filter(f => /\.(png|jpe?g|webp)$/i.test(f)),
 		};
 	});
@@ -91,11 +94,11 @@ export function buildLayerPrompt(layer, { testBot = false, world = configuredWor
 	const manuals = loadManuals();
 	const index = manuals.map(m => `- 《${m.title}》（${manualPath}/${m.title}.md）：${m.when ?? "随时可以翻翻"}`).join("\n");
 	const references = loadReferences();
-	const referenceIndex = references.filter(r => r.hasCard).map(r => {
-		const at = `${referencePath}/${r.name}`;
-		const pictures = r.pictures.map(p => `${at}/${p}`).join("、");
-		return `- 《${r.name}》（灵感卡 ${at}/灵感.md${pictures ? `；图 ${pictures}` : ""}）：${r.when ?? "想找点子的时候"}`;
-	}).join("\n");
+	// 参考不再整个列在设定里：多了以后每次叫醒都要读一遍，跟眼前这块地多半没关系（10-09 用户：怕污染上下文）。
+	// 设定里只说有多少份、大概有哪几类，设计时用 find-inspiration 按地形和想要的东西找两三份，再 Read 那几份
+	const usable = references.filter(r => r.hasCard && r.tags);
+	const kinds = [...new Set(usable.flatMap(r => r.tags.split(/[\s,，、]+/)))].slice(0, 30).join(" ");
+	const referenceIndex = usable.length ? `盖房子的参考一共 ${usable.length} 份，在 ${referencePath}/ 下面，每份一个文件夹（灵感.md、东南.png、西北.png）。标签有：${kinds}。` : "";
 	const intro = WITH_PERSONA.has(layer)
 		? "以下是小克的设定。第一部分是你自己：你是谁、什么性子、怎么说话、怎么过日子。第二部分是这个世界、你的身体和三层分工的规则，最后是你这一层（反应快的那一面，或者拿主意的那一面）自己的规则。\n" +
 		  "两部分说法对不上时：安全、传送、下线、工具、机制和三层分工上的限制，以第二部分为准；在这些限制之内想做什么、怎么做、做成什么样子，按第一部分你自己的性子来。"
@@ -110,7 +113,7 @@ export function buildLayerPrompt(layer, { testBot = false, world = configuredWor
 		"---",
 		own,
 		...(WITH_MANUALS.has(layer) ? [`## 手册目录\n用 Read 读，路径照下面写：\n${index}`] : []),
-		...(WITH_REFERENCES.has(layer) && referenceIndex ? [`## 盖房子的参考\n设计房子、院子之前挑两三份看看，借点子，别照着整栋盖。灵感卡和图都用 Read 看，路径照下面写：\n${referenceIndex}`] : []),
+		...(WITH_REFERENCES.has(layer) && referenceIndex ? [`## 盖房子的参考\n${referenceIndex}不要一份份翻：设计时先 survey-terrain 看地形，再用 find-inspiration 按这块地的地形和这次想要的东西（院子、几层、码头、塔……）找两三份，只 Read 找出来的那几份。每次至少借一个大点子（形状、屋顶、院子、景观、配色），不能只借小装饰，也别照着整栋盖。`] : []),
 	].join("\n\n") + "\n";
 
 	// 检查：手册都写了“什么时候读”；设定里提到的手册都存在；提到的工具 MCP 里都有
@@ -121,6 +124,8 @@ export function buildLayerPrompt(layer, { testBot = false, world = configuredWor
 	for (const r of references) {
 		if (!r.hasCard) warnings.push(`参考《${r.name}》还没有 灵感.md，先不给她看`);
 		else if (!r.when) warnings.push(`参考《${r.name}》的 灵感.md 开头没写“> 适合什么时候看：……”`);
+		else if (!r.big) warnings.push(`参考《${r.name}》的 灵感.md 开头没写“> 大点子：……”`);
+		else if (!r.tags) warnings.push(`参考《${r.name}》的 灵感.md 开头没写“> 标签：……”，find-inspiration 找不到它`);
 	}
 	const all = [text, ...manuals.map(m => m.text)].join("\n");
 	const titles = new Set(manuals.map(m => m.title));
