@@ -41,7 +41,8 @@ function load(file) {
 		try { return JSON.parse(line); } catch { return null; }
 	}).filter(Boolean);
 	const firstPrompt = entries.find(e => e.type === "user" && typeof e.message?.content === "string")?.message.content ?? "";
-	const layer = firstPrompt.includes("反应快") ? "快速反应层" : firstPrompt.includes("慢慢想") ? "思维层" : "单层";
+	const layer = firstPrompt.includes("反应快") ? "快速反应层" : firstPrompt.includes("拿主意") ? "决策脑" : firstPrompt.includes("动手做事") ? "执行脑"
+		: firstPrompt.includes("慢慢想") ? "思维层" : "单层";
 	const assistants = entries.filter(e => e.type === "assistant");
 	const model = assistants[0]?.message?.model ?? "?";
 	const times = entries.map(e => Date.parse(e.timestamp)).filter(Number.isFinite);
@@ -199,7 +200,8 @@ const args = process.argv.slice(2);
 if (args.includes("--list")) {
 	listSessions();
 } else {
-	let ids = args;
+	// 一局的文件夹（logs/runs/...，scripts/logs.mjs 归的）：看里面快速反应层和决策脑的会话记录
+	let ids = args.flatMap(a => (existsSync(join(a, "run.json")) ? ["fast", "mind"].map(l => join(a, `${l}.jsonl`)).filter(f => existsSync(f)) : [a]));
 	if (!ids.length) {
 		const saved = JSON.parse(readFileSync(join(ROOT, "logs", "sessions.json"), "utf8"));
 		ids = [saved.fast, saved.mind].filter(Boolean);

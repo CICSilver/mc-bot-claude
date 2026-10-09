@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildLayerPrompt, MANUAL_DIR, REFERENCE_DIR } from "./prompt.mjs";
 import { refreshReferences } from "./references.mjs";
+import { beginRun, finishRun, pushRuns } from "./logs.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -200,6 +201,16 @@ if (layer !== "fast") {
 		await sleep(1000);
 	}
 
+	// 这一局的日志：记下耳朵、身体的日志现在写到哪了，下线时把这一局的那段和三层的会话记录归进 logs/runs/，传到服务器上（scripts/logs.mjs）。
+	// 上一局要是直接点 X 关的窗口，它的那份这时候补上，在后台传
+	const side = { 正式世界: "main", 测试世界: "test" }[CONFIG.world] ?? "";
+	const leftover = existsSync(join(ROOT, "logs", "run.json"));
+	beginRun({
+		side, login: CONFIG.username, world: CONFIG.world, mcp: resolve(CONFIG.mcp),
+		layers: Object.fromEntries(Object.entries(LAYERS).map(([name, L]) => [name, `${L.model} ${L.effort}`])),
+	});
+	if (leftover) pushRuns().catch(() => {});
+
 	// 身体：单独的进程组，在窗口里按 Ctrl+C 不会把它一起关掉；这个启动器没了它会自己下线
 	const bodyLog = openSync("logs/body.log", "a");
 	const body = spawn(process.execPath, [
@@ -227,7 +238,7 @@ if (layer !== "fast") {
 			EAR_PORT: String(EAR_PORT), MC_BOT_NAME: CONFIG.username, MC_BOT_NICK: CONFIG.nick ?? "小克",
 			MC_COMPANIONS: CONFIG.env?.XIAOKE_COMPANIONS ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL,
 			// 耳朵只听这个世界所在的服：正式世界在正式服（main），测试世界在测试服（test）
-			MC_SIDE: { 正式世界: "main", 测试世界: "test" }[CONFIG.world] ?? "",
+			MC_SIDE: side,
 		},
 	});
 
@@ -288,7 +299,20 @@ if (layer !== "fast") {
 
 	const claude = runClaude();
 	let closing = false;
-	const stop = code => { clearInterval(watch); ear.kill(); process.exit(code ?? 0); };
+	const stop = async code => {
+		clearInterval(watch);
+		ear.kill();
+		try {
+			if (finishRun()) {
+				console.log("\n把这一局的日志传到服务器上……");
+				const sent = await Promise.race([pushRuns(), sleep(60000).then(() => { throw new Error("一分钟还没传完"); })]);
+				if (sent.length) console.log(`传好了：${sent.join("、")}`);
+			}
+		} catch (e) {
+			console.warn(`日志没传上去（${e.message}），留在 logs/runs/ 里，下次下线时一起传。`);
+		}
+		process.exit(code ?? 0);
+	};
 	const sidePid = {};
 	const startedAt = Date.now();
 	const watch = setInterval(() => {
