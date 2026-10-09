@@ -159,7 +159,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 动作队列（`do-steps`，`src/tools/steps-tools.ts`，参考 airi 的 action queue）：好几步的跑腿（从箱子拿东西、合成、走过去、放下、存东西……）写成一串交给身体，后台一步步做，马上返回，全做完或者哪一步不行才报一次 [进展]，不用每走一步都回去问一次模型。每一步就是调对应的工具（在身体里登记了一份，参数照样校验，交上来时先整串查一遍），按回复的开头认成没成，认不出的当没成、停下来。不行的那一步暂停着，补上缺的东西 `resume-job` 从那一步接着做；陪人、躲怪照样暂停、自己接着做；`append` 往正在做的一串后面接
 - 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、门和栅栏门、用 “.” 挖空），`build-house` 应急的方盒子小屋（背包里有木门就装上），`build-fence` 围栅栏（有栅栏门就装在口子上），`make-farm` 开垦农田并播种、可以在中间放水。都会先核对材料
 - 好感度和礼物（`src/relationships.ts`、`src/gifts.ts`、`src/tools/relationship-tools.ts`）：`get-relationships`、`change-affinity`（一次 -30～+15，每人每天最多涨 25，心上人只能有一个）。阶段和门槛在 `src/relationships.ts` 的 `STAGES` 里
-- 本能（`src/senses.ts`）：天气、注视、危险事件，转头看人，`run-away` 逃跑；`chase-animal` 追着小动物玩。`XIAOKE_COMPANIONS` 里的 AI 同伴不算“盯着看”。在外面干长活时下起雨会自动停手
+- 本能（`src/senses.ts`）：天气、注视、危险事件，转头看人，`run-away` 逃跑；`chase-animal` 追着小动物玩。`XIAOKE_COMPANIONS` 里的 AI 同伴不算“盯着看”。下雨不再让长活停下（10-09 改的，只让她心情差一点）；在水里会浮起来、游上岸，头在水下快憋不住时放下一切去换气（只走水里过得去的路，栈道底下也游得出来）
 - 熔炉（`src/tools/furnace-tools.ts`）：`smelt-item` 放进去就返回，烧好了发 [进展]；`take-from-furnace` 取出来
 - 陪伴（`src/companion.ts`、`src/tools/companion-tools.ts`）：`accompany-player` 在玩家身边随意走动、顺手干活；`roam-around` 围着一个地点自己逛；`follow-player` 紧跟；`stop-following` 停下。调试时设环境变量 `COMPANION_DEBUG=1`
 - 箱子（`src/tools/container-tools.ts`）：`open-container`、`take-item`、`store-item`。拿到、存进的比要的少会如实说（`Partly took` / `Partly stored`），回复里只说这一样东西现在有多少；关箱子以后先让服务器重发一遍背包，再按服务器给的数核对
