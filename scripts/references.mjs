@@ -94,7 +94,7 @@ function color(name) {
 }
 
 // 等距视角：view 那个角朝着看的人
-function render(w, view, T = 12) {
+export function render(w, view, T = 12) {
 	const rot = { se: (x, z) => [x, z], nw: (x, z) => [w.sx - 1 - x, w.sz - 1 - z] }[view];
 	const RX = w.sx, RZ = w.sz;
 	const W = (RX + RZ + 1) * T + 4, H = Math.ceil((RX + RZ) * T / 2) + (w.sy + 1) * T + 4;
