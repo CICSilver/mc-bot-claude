@@ -53,18 +53,22 @@ const RULES = [
 	[/water/, [60, 100, 220, 150]],
 	[/lava/, [230, 100, 20]],
 	[/cherry_leaves|flowering_azalea|pink_petals/, [235, 160, 190]],
-	[/leaves|azalea|moss|grass_block|^grass$|short_grass|tall_grass|fern|vine|lily_pad|kelp|seagrass|sweet_berry|sapling/, [80, 140, 60]],
+	[/leaves|azalea|moss|grass_block|^grass$|short_grass|tall_grass|fern|vine|lily_pad|kelp|seagrass|sweet_berry|sapling|firefly_bush|bush$/, [80, 140, 60]],
 	[/bamboo|scaffolding/, [130, 170, 60]],
 	[/calcite|quartz|white_concrete|snow|bone_block|end_rod/, [232, 232, 226]],
 	[/diorite/, [205, 205, 205]],
 	[/andesite/, [136, 136, 138]],
 	[/deepslate|blackstone|basalt/, [70, 70, 75]],
-	[/stone_brick|^stone|cobblestone|smooth_stone|gravel|tuff|furnace|smoker|brewing_stand/, [125, 125, 125]],
+	[/stone_brick|^stone|cobblestone|smooth_stone|gravel|tuff|furnace|smoker|brewing_stand|grindstone/, [125, 125, 125]],
 	[/sandstone|^sand$/, [216, 203, 155]],
 	[/mud_brick|packed_mud/, [140, 106, 80]],
 	[/^dirt|coarse_dirt|rooted_dirt|podzol|farmland|dirt_path/, [134, 96, 67]],
-	[/brick|flower_pot|potted/, [150, 74, 58]],
-	[/lantern|torch|candle|campfire|glowstone|shroomlight|froglight|sea_pickle/, [255, 190, 90]],
+	[/brick|flower_pot|potted|decorated_pot/, [150, 74, 58]],
+	[/soul_sand|soul_soil/, [81, 62, 50]],
+	[/nether_wart|enchanting_table/, [140, 30, 40]],
+	[/rail$/, [120, 110, 100]],
+	[/campfire/, [110, 80, 50]],   // 多半是不点火、当横木用的
+	[/lantern|torch|candle|glowstone|shroomlight|froglight|sea_pickle|copper_bulb/, [255, 190, 90]],
 	[/beehive|bee_nest|hay|loom|turtle_egg/, [200, 160, 70]],
 	[/barrel|chest|bookshelf|lectern|composter|tripwire_hook|lever/, [140, 100, 55]],
 	[/redstone_block/, [170, 20, 10]],
@@ -72,10 +76,10 @@ const RULES = [
 	[/coral/, [150, 140, 130]],
 	[/copper/, [190, 110, 80]],
 	[/prismarine/, [90, 160, 150]],
-	[/flower|tulip|poppy|dandelion|orchid|allium|bluet|daisy|cornflower|lily_of|rose|peony|lilac|sunflower/, [220, 80, 120]],
+	[/flower|tulip|poppy|dandelion|orchid|allium|bluet|daisy|cornflower|lily_of|rose|peony|lilac|sunflower|eyeblossom/, [220, 80, 120]],
 ];
 function color(name) {
-	if (!name || EMPTY.test(name)) return null;
+	if (!name || EMPTY.test(name) || name === "tripwire") return null;   // 绊线细得看不见
 	for (const dye of Object.keys(DYE)) {
 		if (name === `${dye}_terracotta` || name === `${dye}_glazed_terracotta`) return TERRACOTTA[dye];
 		if (name.startsWith(`${dye}_`) && /concrete|wool|carpet|stained_glass|banner|bed|candle|shulker/.test(name)) return /stained_glass/.test(name) ? [...DYE[dye], 150] : DYE[dye];
