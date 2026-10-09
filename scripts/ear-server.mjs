@@ -142,6 +142,8 @@ async function withSnapshot(line) {
 const NUDGES = new Set(["琢磨", "闲聊"]);
 // 决策脑自己托出去的话，不用再给它看一遍；快速反应层真说出口的那句会以“你: ……”出现在“这段时间”里
 const FROM_MIND = new Set(["转告"]);
+// 只留在快速反应层的事：有人盯着她看，嘴巴瞄一眼、冒一句就完了，不给决策脑看（10-09 用户定的）
+const FAST_ONLY = new Set(["注视"]);
 
 function emit(kind, body, to = ROUTES[kind]) {
 	if (NUDGES.has(kind) && !clients[FAST].size) return;
@@ -149,7 +151,7 @@ function emit(kind, body, to = ROUTES[kind]) {
 	console.log(`${line}  → ${to.join("+")}`);
 	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
 	// 只叫醒了快速反应层的事，攒着给决策脑看；执行脑那边的事它从 [汇报] 里知道
-	else if (to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
+	else if (to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind) && !FAST_ONLY.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
 	for (const layer of [FAST, EXEC]) {
 		if (!to.includes(layer)) continue;
 		queues[layer] = queues[layer].then(() => withSnapshot(line)).then(text => deliver(layer, text)).catch(e => console.log(`${ts()} 发给${NAMES[layer]}失败：${e}`));
