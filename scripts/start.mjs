@@ -236,7 +236,7 @@ if (layer !== "fast") {
 		env: {
 			...process.env,
 			EAR_PORT: String(EAR_PORT), MC_BOT_NAME: CONFIG.username, MC_BOT_NICK: CONFIG.nick ?? "小克",
-			MC_COMPANIONS: CONFIG.env?.XIAOKE_COMPANIONS ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL,
+			MC_COMPANIONS: CONFIG.env?.XIAOKE_COMPANIONS ?? "", MC_ALIASES: CONFIG.env?.XIAOKE_ALIASES ?? "", EAR_PARENT_PID: String(process.pid), XIAOKE_BODY_URL: BODY_URL,
 			// 耳朵只听这个世界所在的服：正式世界在正式服（main），测试世界在测试服（test）
 			MC_SIDE: side,
 		},
