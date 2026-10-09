@@ -1,7 +1,7 @@
 // 盖房子的参考（prompts/小克/参考/，归你）：每个参考一个文件夹，放建筑文件（.litematic，或者原版结构 .nbt）、截图，再加一张灵感卡 灵感.md。
 // 这个脚本给有建筑文件的参考补上两张预览图（东南.png、西北.png，方块按名字粗略上色）和一份 材料.md（用了哪些方块、各多少），
 // 建筑文件比预览新的时候重画。思维层只看预览图、灵感卡和材料，不拿整栋的图纸，免得照着原样盖。
-// 用法：node scripts/references.mjs        启动器每次启动也会调用一次
+// 用法：node scripts/references.mjs [文件夹]   启动器每次启动也会调用一次；给了文件夹就画那里面的（每份一个子文件夹）
 import { existsSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -12,13 +12,13 @@ import { gunzipSync, deflateSync } from "node:zlib";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // NBT 解析借身体（MCP）那边装好的 prismarine-nbt
-function loadNbt() {
+export function loadNbt() {
 	const body = JSON.parse(readFileSync(join(ROOT, "config", "xiaoke-body.json"), "utf8"));
 	return createRequire(join(resolve(ROOT, body.mcp), "package.json"))("prismarine-nbt");
 }
 
 // 读成 { sx, sy, sz, at(x, y, z) -> 方块名 }
-async function loadBuild(nbt, path) {
+export async function loadBuild(nbt, path) {
 	let buf = readFileSync(path);
 	try { buf = gunzipSync(buf); } catch { /* 没压缩 */ }
 	const root = nbt.simplify((await nbt.parse(buf)).parsed);
@@ -154,9 +154,8 @@ function materials(w, source) {
 	return `# 用了哪些方块\n\n由 scripts/references.mjs 从 ${source} 自动统计。大小 ${w.sx}×${w.sy}×${w.sz}（东西×高×南北），一共 ${total} 块，${counts.size} 种。\n\n| 方块 | 数量 |\n|---|---|\n${rows.join("\n")}\n`;
 }
 
-// 补上缺的、过时的预览图和材料表；返回做了什么
-export async function refreshReferences(log = console.log) {
-	const dir = join(ROOT, REFERENCE_DIR);
+// 补上缺的、过时的预览图和材料表；返回做了什么。dir 不给就是参考文件夹（挑新参考的时候可以先在别的文件夹里画出来看）
+export async function refreshReferences(log = console.log, dir = join(ROOT, REFERENCE_DIR)) {
 	if (!existsSync(dir)) return;
 	let nbt = null;
 	for (const name of readdirSync(dir)) {
@@ -189,4 +188,4 @@ export async function refreshReferences(log = console.log) {
 	}
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await refreshReferences();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await refreshReferences(console.log, process.argv[2] ? resolve(process.argv[2]) : undefined);

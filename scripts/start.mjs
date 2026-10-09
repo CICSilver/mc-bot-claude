@@ -226,6 +226,9 @@ if (layer !== "fast") {
 			XIAOKE_RELATIONSHIPS: join(HOME, "state", "relationships.json"),
 			// 她亲手放下的方块（房子、田、箱子……），有人动了她能注意到
 			XIAOKE_BELONGINGS: join(HOME, "state", "belongings.json"),
+			// 盖房子的参考：find-inspiration 从这里找，给她看的路径照她在 home 里看到的写（home 不是本目录时，下面会拷一份叫“参考”）
+			XIAOKE_REFERENCES: join(ROOT, REFERENCE_DIR),
+			XIAOKE_REFERENCES_SHOWN: HOME !== resolve(ROOT) ? "参考" : REFERENCE_DIR,
 		},
 	});
 
