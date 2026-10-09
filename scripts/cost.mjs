@@ -2,8 +2,9 @@
 // 用法：
 //   node scripts/cost.mjs                              最近一次启动的几层（logs/sessions.json）
 //   node scripts/cost.mjs mind=6cae2fab fast=67a1112e   指定会话（会话号可以只写开头几位，用 measure.mjs --list 找）
+//   node scripts/cost.mjs logs/runs/<一局>               一局的文件夹（scripts/logs.mjs 归的，换台电脑拉下来的也行）
 // 订阅登录不是按这个价扣额度，只当几局之间的比例看。
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,14 +35,17 @@ function findTranscript(id) {
 }
 
 const args = process.argv.slice(2);
-const sessions = args.length
+const runDir = args.length === 1 && existsSync(join(args[0], "run.json")) ? args[0] : null;
+const sessions = runDir
+	? Object.fromEntries(["fast", "exec", "mind"].filter(l => existsSync(join(runDir, `${l}.jsonl`))).map(l => [l, join(runDir, `${l}.jsonl`)]))
+	: args.length
 	? Object.fromEntries(args.map(a => a.split("=")))
 	: JSON.parse(readFileSync(join(ROOT, "logs", "sessions.json"), "utf8"));
 
 let total = 0;
 for (const layer of ["mind", "exec", "fast"]) {
 	if (!sessions[layer]) continue;
-	const file = findTranscript(sessions[layer]);
+	const file = runDir ? sessions[layer] : findTranscript(sessions[layer]);
 	if (!file) { console.log(`\n== ${layer}：找不到会话 ${sessions[layer]}`); continue; }
 	const turns = [];
 	const seen = new Set();

@@ -146,6 +146,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 | `server/xiaoke-bridge` | 服务器模组 xiaoke-bridge 的源码（只装服务器，玩家不用装），`python server/xiaoke-bridge/build.py` 编译成 `build/xiaoke-bridge-1.0.0.jar`，说明见那里的 README |
 | `server/datapacks/xiaoke_fx` | 服务器上的数据包源文件（装在服务器 `world/datapacks/xiaoke_fx`）：气泡是一个 text_display，每 tick 挪到主人头顶、到时间收掉，主人下线也收掉；声音和粒子在主人身上放。几个 AI 玩家可以同时用 |
 | `scripts/start.mjs` | 真正的启动器：找 claude、开身体和耳朵、另开决策脑的窗口、在本窗口启动快速反应层；两层各自的会话号记在 `logs/sessions.json`，`--continue` 靠它接上；哪个窗口关了就一起收掉 |
+| `scripts/logs.mjs` | 一局的日志归到 `logs/runs/<日期>_<时分>_<main\|test>_<登录名>/`：这一局耳朵和身体的日志、三层的会话记录、用的设定。她下线时启动器自动归好、传到服务器的 `~/xiaoke-logs/`，服务器和本地都只留最近两天；直接点 X 关的窗口，下次启动时补上。换台电脑看：`node scripts/logs.mjs pull`（`list` 看有哪几局，`push` 手动传） |
 | `scripts/cost.mjs` | 算一局里每一层发了多少次请求、读写多少 token，按 API 价粗算花了多少，跑腿的请求按用途分一分（`node scripts/cost.mjs`，或者 `mind=会话号 fast=会话号` 指定） |
 | `测试场景/` | 对比测试用的现成东西：建材箱的控制台命令、告诉她箱子在哪的 [记下]，用法见 [测试方案.md](测试方案.md) 最后一节 |
 | `scripts/measure.mjs` | 体检：从会话记录里算出她多久回话、正忙时回话要多久、每次想了多少、长活顺不顺，单层和两层的会话可以放一起比（`--list` 列出所有小克会话）。怎么测见 [测试方案.md](测试方案.md) |
