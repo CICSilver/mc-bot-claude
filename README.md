@@ -153,7 +153,7 @@ Claude Code 本来是你说一句、它回一句，而且一次只能想一件�
 Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代码在私有仓库 [CICSilver/minecraft-mcp-server-xiaoke](https://github.com/CICSilver/minecraft-mcp-server-xiaoke)（本地分支 `xiaoke`，基于 yuniko-software/minecraft-mcp-server 的 240c8ce）。换电脑时 clone 下来 `npm install && npm run build` 即可。本地改动：
 
 - mineflayer 升到 4.39.0 以支持 26.1，去掉了进服时自动发的英文消息
-- 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、`attack-entity` 打猎自卫、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
+- 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、用桶舀水倒水（看着水面用手里的东西，对着方块右键桶是装不上水的）、`attack-entity` 打猎自卫（按武器的冷却挥；血 8 以下不对怪开打，打着打着掉到 8 以下就停手交给本能跑；死了会照实说）、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
 - 后台长活（`src/jobs.ts`、`src/tools/job-tools.ts`）：`gather-blocks` 砍树挖矿采花，`harvest-crops` 收庄稼并补种，`go-fishing` 钓一阵子鱼，`explore` 往一个方向探险、找到想找的东西就停，`lure-animals` 拿着吃的把动物引过去，`stop-job` 停下。会自己换工具、捡掉落物，遇到天黑、来怪、受伤、饿了、背包满了就停下
 - 动作队列（`do-steps`，`src/tools/steps-tools.ts`，参考 airi 的 action queue）：好几步的跑腿（从箱子拿东西、合成、走过去、放下、存东西……）写成一串交给身体，后台一步步做，马上返回，全做完或者哪一步不行才报一次 [进展]，不用每走一步都回去问一次模型。每一步就是调对应的工具（在身体里登记了一份，参数照样校验，交上来时先整串查一遍），按回复的开头认成没成，认不出的当没成、停下来。不行的那一步暂停着，补上缺的东西 `resume-job` 从那一步接着做；陪人、躲怪照样暂停、自己接着做；`append` 往正在做的一串后面接
 - 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、门和栅栏门、用 “.” 挖空），`build-house` 应急的方盒子小屋（背包里有木门就装上），`build-fence` 围栅栏（有栅栏门就装在口子上），`make-farm` 开垦农田并播种、可以在中间放水。都会先核对材料
