@@ -2,6 +2,8 @@
 
 这是独立的 Codex 测试项目，使用 `clawd_test`。小克的人设、心情、记忆和 Minecraft 身体来自原 Claude 三层版；运行器改为 Codex CLI 的 `app-server`。
 
+开发和测试目录为 `D:\workspace\mc-bot\mc-bot-codex`；正式运行根目录为 `F:\PCL-2.13.1.1\mc-bot`。改造完成并测试通过后，将已验证改动合并到正式目录下的对应项目，保留正式配置与记忆状态，再恢复正式服。
+
 ## 启动
 
 首次授权（已完成过则跳过）：
