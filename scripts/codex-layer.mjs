@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import { AppServer, openThread } from './codex-client.mjs';
 import { ROOT, childEnv, findCodex, makeProfile, layerOptions } from './codex-config.mjs';
 import { LayerLoop } from './layer-loop.mjs';
+import { buildStartupMemory } from './prompt.mjs';
 
 const layer = process.argv[2], config = JSON.parse(readFileSync(join(ROOT, 'config/xiaoke-body.json'), 'utf8'));
 const home = resolve(ROOT, process.env.XIAOKE_HOME || config.home || '.'), bodyUrl = `http://127.0.0.1:${Number(process.env.XIAOKE_BODY_PORT || config.bodyPort) || 25598}`;
@@ -51,7 +52,8 @@ try {
   socket.addEventListener('error', () => void shutdown(new Error('耳朵连接失败')));
   socket.addEventListener('close', () => { if (!closing) void shutdown(new Error('耳朵连接已断开')); });
   console.log(`${layer}：${options.model} / ${options.effort}；Codex 会话 ${threadId}`);
-  loop.enqueue(`（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是${{ fast: '反应快', exec: '动手做事', mind: '拿主意' }[layer]}的那一面，按“醒来时”的步骤开始。事件监听已由启动器准备，无需调用监听工具。`);
+  const startupMemory = layer === 'fast' ? `\n\n${buildStartupMemory(home)}` : '';
+  loop.enqueue(`（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是${{ fast: '反应快', exec: '动手做事', mind: '拿主意' }[layer]}的那一面，按“醒来时”的步骤开始。事件监听已由启动器准备，无需调用监听工具。${startupMemory}`);
   createInterface({ input: process.stdin }).on('line', text => {
     if (text.trim() === '/quit') void shutdown();
     else if (text.trim()) loop.enqueue(`（坐在电脑前的主人）${text}`);
