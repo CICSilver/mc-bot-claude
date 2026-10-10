@@ -1,5 +1,5 @@
 // 把小克的设定拼成每一层的系统提示词，顺便检查几处容易对不上的地方：
-//   prompts/小克/人格.md、生活.md —— 她是谁、怎么过日子（主人自己维护）。快速反应层和决策脑看；执行脑只管把活做成，不带这两份，免得每走一步都重读
+//   prompts/小克/人格.md、生活.md、说话.md —— 她是谁、怎么过日子、怎么开口（主人自己维护）。快速反应层和决策脑看；执行脑只管把活做成
 //   prompts/系统/共用.md —— 世界、身体、三层分工、说话限制、好感度、安全（三层都看）
 //   prompts/世界/<world>.md —— 她在哪个世界：出生点在哪、有什么。正式版和测试版各连一个服，用 config/xiaoke-body.json 的 world 选（三层都看）
 //   prompts/系统/快.md、执行.md、决策.md —— 这一层自己的规则；测试版.md —— 测试号另加的说明
@@ -16,7 +16,7 @@ export const MANUAL_DIR = "prompts/系统/手册";
 export const WORLD_DIR = "prompts/世界";
 const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/决策.md" };
 export const LAYER_NAMES = Object.keys(LAYER_FILES);
-// 哪一层带她自己的两份（人格、生活），哪一层有手册目录、参考的概要（一共几份、有哪些标签）
+// 哪一层带人格、生活、说话习惯，哪一层有手册目录、参考的概要（一共几份、有哪些标签）
 const WITH_PERSONA = new Set(["fast", "mind"]);
 const WITH_MANUALS = new Set(["exec", "mind"]);
 const WITH_REFERENCES = new Set(["mind"]);
@@ -94,6 +94,7 @@ function configuredWorld() {
 export function buildLayerPrompt(layer, { testBot = false, world = configuredWorld(), manualPath = MANUAL_DIR, referencePath = REFERENCE_DIR } = {}) {
 	const persona = stripComments(read("prompts/小克/人格.md"));
 	const life = stripComments(read("prompts/小克/生活.md"));
+	const speech = stripComments(read("prompts/小克/说话.md"));
 	const shared = stripComments(read("prompts/系统/共用.md"));
 	const worldFile = world ? `${WORLD_DIR}/${world}.md` : null;
 	const worldText = worldFile && existsSync(join(ROOT, worldFile)) ? stripComments(read(worldFile)) : "";
@@ -115,7 +116,7 @@ export function buildLayerPrompt(layer, { testBot = false, world = configuredWor
 	const text = [
 		intro,
 		"---",
-		...(WITH_PERSONA.has(layer) ? [persona, life, "---"] : []),
+		...(WITH_PERSONA.has(layer) ? [persona, life, speech, "---"] : []),
 		shared,
 		...(worldText ? [worldText] : []),
 		...(test ? [test] : []),
