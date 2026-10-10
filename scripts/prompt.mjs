@@ -24,6 +24,14 @@ const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n
 // <!-- --> 里是写给维护的人看的说明，不给小克
 const stripComments = text => text.replace(/<!--[\s\S]*?-->\n?/g, "").trim();
 
+export function buildStartupMemory(home) {
+	return [
+		"## 醒来时已读到的记忆",
+		"下面是启动程序从你的记忆里读取的当前内容，无需再重复读取。跟人打招呼、接话前先按人物记忆确认已有称呼和约定；已有昵称就继续用。历史经历里的旧好感度不是当前分数，需要确认分数时用 get-relationships。",
+		...['self.md', 'people.md'].map(name => `### memory/${name}\n${readFileSync(join(home, 'memory', name), 'utf8')}`),
+	].join("\n\n");
+}
+
 function loadManuals() {
 	return readdirSync(join(ROOT, MANUAL_DIR)).filter(f => f.endsWith(".md")).sort().map(file => {
 		const text = read(`${MANUAL_DIR}/${file}`);
