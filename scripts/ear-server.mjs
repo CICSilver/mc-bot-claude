@@ -127,16 +127,10 @@ function frame(text) {
 	return Buffer.concat([header, payload]);
 }
 
-// 告诉身体决策脑 / 执行脑这一轮开始了（一轮结束由它们的 Stop hook 直接告诉身体）
-function turnStarted(layer) {
-	fetch(`${BODY_URL}/mind-state?layer=${layer}`, {
-		method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ active: true }), signal: AbortSignal.timeout(1000),
-	}).catch(() => {});
-}
+// 实际回合状态由 Codex 控制器通知身体。
 
 function deliver(layer, text) {
 	if (layer === MIND) lastMindAt = Date.now();
-	if (layer !== FAST && clients[layer].size) turnStarted(layer);
 	if (clients[layer].size === 0) {
 		pending[layer].push(text);
 		if (pending[layer].length > 50) pending[layer].shift();
@@ -443,7 +437,6 @@ http.on("upgrade", (req, socket) => {
 	socket.write(frame(`${ts()} [开始监听] ${onlineText()}`));
 	const queued = pending[layer].splice(0);
 	for (const line of queued) socket.write(frame(line));
-	if (layer !== FAST && queued.length) turnStarted(layer);
 });
 http.on("error", e => {
 	if (e.code === "EADDRINUSE") { console.log(`端口 ${PORT} 已被占用，应该已经有一个耳朵在运行了`); process.exit(0); }

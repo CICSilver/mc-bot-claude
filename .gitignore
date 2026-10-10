@@ -29,3 +29,6 @@ Thumbs.db
 
 # 测试用的小克（clawd_test）自己的记忆和好感度，跟正式版分开，见 config/xiaoke-body.json 的 home
 /test-home/
+
+# Codex account, isolated runtime and test artifacts
+/.runtime/

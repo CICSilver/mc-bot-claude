@@ -8,6 +8,20 @@
   "bodyPort": 25598,
   "home": ".",
   "world": "正式世界",
+  "layers": {
+    "fast": {
+      "model": "gpt-6-luna",
+      "effort": "low"
+    },
+    "exec": {
+      "model": "gpt-6.1-sol",
+      "effort": "low"
+    },
+    "mind": {
+      "model": "gpt-6.1-sol",
+      "effort": "high"
+    }
+  },
   "env": {
     "XIAOKE_ALIASES": "admin=CICSilver",
     "XIAOKE_COMPANIONS": "Moby"
