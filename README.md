@@ -26,6 +26,8 @@ npm run login
 
 当前配置连接 `mc.lemalin.icu:25565`，身体端口 `25613`、耳朵端口 `25612`。服务器必须已切到测试服，正式服会拒绝 `clawd_test`；切服在服务器使用 `mc-switch test`，恢复正式服用 `mc-switch main`。启动器不会自动切服。
 
+每轮改造或测试结束后，测试流程必须停止测试版小克、完成日志归档，再恢复正式服并确认 `mc-active unit` 返回 `minecraft`。具体约定见 [AGENTS.md](AGENTS.md)。
+
 ## 实时监控
 
 ```powershell
