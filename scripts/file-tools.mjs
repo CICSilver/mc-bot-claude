@@ -10,7 +10,9 @@ export class Files {
   constructor(layer, home) {
     if (!['fast', 'exec', 'mind'].includes(layer)) throw new Error('未知层');
     this.layer = layer; this.home = realpathSync(home);
-    this.readable = ['memory', ...(layer !== 'fast' ? ['手册'] : []), ...(layer === 'mind' ? ['参考'] : [])].map(p => join(this.home, p));
+    const manual = existsSync(join(this.home, '手册')) ? '手册' : 'prompts/系统/手册';
+    const reference = existsSync(join(this.home, '参考')) ? '参考' : 'prompts/小克/参考';
+    this.readable = ['memory', ...(layer !== 'fast' ? [manual] : []), ...(layer === 'mind' ? [reference] : [])].map(p => join(this.home, p));
   }
   path(input, write = false) {
     if (typeof input !== 'string' || !input || input.includes('\0') || isAbsolute(input) || /^[A-Za-z]:|^\\\\/.test(input)) throw new Error('只接受项目内相对路径');

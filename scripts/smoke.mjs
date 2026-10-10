@@ -1,6 +1,6 @@
 // 真实订阅调用：npm run smoke -- fast [--game] [--continue]
 // --game 要求身体已启动，只查询状态，不移动或修改世界。
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { AppServer, openThread } from './codex-client.mjs';
 import { ROOT, childEnv, findCodex, makeProfile, layerOptions } from './codex-config.mjs';
@@ -32,11 +32,12 @@ try {
   loop.on('output', text => { report.output += text; process.stdout.write(text); });
   let request = '这是接入测试回合。请用 files.Read 列出 memory 目录，';
   if (layer === 'mind') {
-    const folder = readdirSync(join(home, '参考'), { withFileTypes: true }).find(e => e.isDirectory() && readdirSync(join(home, '参考', e.name)).some(n => /\.png$/i.test(n)));
+    const reference = existsSync(join(home, '参考')) ? '参考' : 'prompts/小克/参考';
+    const folder = readdirSync(join(home, reference), { withFileTypes: true }).find(e => e.isDirectory() && readdirSync(join(home, reference, e.name)).some(n => /\.png$/i.test(n)));
     if (folder) {
-      const image = readdirSync(join(home, '参考', folder.name)).find(n => /\.png$/i.test(n));
-      request += `再用 files.Read 读取参考图片「参考/${folder.name}/${image}」，简短描述看到的建筑。`;
-      report.image = `参考/${folder.name}/${image}`;
+      const image = readdirSync(join(home, reference, folder.name)).find(n => /\.png$/i.test(n));
+      request += `再用 files.Read 读取参考图片「${reference}/${folder.name}/${image}」，简短描述看到的建筑。`;
+      report.image = `${reference}/${folder.name}/${image}`;
     }
   }
   if (game) request += '再调用 Minecraft 的 get-status 和 get-position，';
