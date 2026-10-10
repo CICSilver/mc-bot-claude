@@ -30,7 +30,7 @@ try {
     if (event.type === 'usage') report.usage = event.tokenUsage;
   });
   loop.on('output', text => { report.output += text; process.stdout.write(text); });
-  let request = '这是接入测试回合。请用 files.Read 列出 memory 目录，';
+  let request = '（启动程序的本地接入检查）按醒来步骤，先用文件读取工具读取 memory/self.md 和 memory/people.md，';
   if (layer === 'mind') {
     const reference = existsSync(join(home, '参考')) ? '参考' : 'prompts/小克/参考';
     const folder = readdirSync(join(home, reference), { withFileTypes: true }).find(e => e.isDirectory() && readdirSync(join(home, reference, e.name)).some(n => /\.png$/i.test(n)));
