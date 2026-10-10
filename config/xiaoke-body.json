@@ -13,5 +13,19 @@
     "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
     "XIAOKE_ALIASES": "admin=CICSilver",
     "XIAOKE_COMPANIONS": "Moby,clawd"
+  },
+  "layers": {
+    "fast": {
+      "model": "gpt-6-luna",
+      "effort": "low"
+    },
+    "exec": {
+      "model": "gpt-6.1-sol",
+      "effort": "low"
+    },
+    "mind": {
+      "model": "gpt-6.1-sol",
+      "effort": "high"
+    }
   }
 }
