@@ -229,6 +229,12 @@ if (layer !== "fast") {
 			// 盖房子的参考：find-inspiration 从这里找，给她看的路径照她在 home 里看到的写（home 不是本目录时，下面会拷一份叫“参考”）
 			XIAOKE_REFERENCES: join(ROOT, REFERENCE_DIR),
 			XIAOKE_REFERENCES_SHOWN: HOME !== resolve(ROOT) ? "参考" : REFERENCE_DIR,
+			// 心情：每件事动多少的表（归你改，下次启动生效）。心情本身存在 state/mood.json，跟好感度放一起
+			XIAOKE_MOOD_CONFIG: join(ROOT, "prompts", "小克", "心情.json"),
+			// 心情的分析日志（每件事前后的数、跨档），收尾时跟 body.log 一起归进这一局的文件夹（scripts/logs.mjs）
+			XIAOKE_ANALYSIS: join(ROOT, "logs", "analysis.jsonl"),
+			// config 里写 "mood": false 就关掉心情（〔现在〕不写心情，feel 回“关着”，身体动作跟原来一样）；不写就是开着
+			...(CONFIG.mood === false ? { XIAOKE_MOOD: "off" } : {}),
 		},
 	});
 

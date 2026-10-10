@@ -16,7 +16,7 @@ export const MANUAL_DIR = "prompts/系统/手册";
 export const WORLD_DIR = "prompts/世界";
 const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/决策.md" };
 export const LAYER_NAMES = Object.keys(LAYER_FILES);
-// 哪一层带她自己的两份（人格、生活），哪一层有手册目录、参考目录
+// 哪一层带她自己的两份（人格、生活），哪一层有手册目录、参考的概要（一共几份、有哪些标签）
 const WITH_PERSONA = new Set(["fast", "mind"]);
 const WITH_MANUALS = new Set(["exec", "mind"]);
 const WITH_REFERENCES = new Set(["mind"]);
@@ -97,7 +97,8 @@ export function buildLayerPrompt(layer, { testBot = false, world = configuredWor
 	// 参考不再整个列在设定里：多了以后每次叫醒都要读一遍，跟眼前这块地多半没关系（10-09 用户：怕污染上下文）。
 	// 设定里只说有多少份、大概有哪几类，设计时用 find-inspiration 按地形和想要的东西找两三份，再 Read 那几份
 	const usable = references.filter(r => r.hasCard && r.tags);
-	const kinds = [...new Set(usable.flatMap(r => r.tags.split(/[\s,，、]+/)))].slice(0, 30).join(" ");
+	// 标签全列出来（去重）：以前截到前 30 个，山坡、陡坡、半地下、阁楼、雪地、秘密基地、阳台这几个排在后面就看不到了（10-09）
+	const kinds = [...new Set(usable.flatMap(r => r.tags.split(/[\s,，、]+/)).filter(Boolean))].join(" ");
 	const referenceIndex = usable.length ? `盖房子的参考一共 ${usable.length} 份，在 ${referencePath}/ 下面，每份一个文件夹（灵感.md、东南.png、西北.png）。标签有：${kinds}。` : "";
 	const intro = WITH_PERSONA.has(layer)
 		? "以下是小克的设定。第一部分是你自己：你是谁、什么性子、怎么说话、怎么过日子。第二部分是这个世界、你的身体和三层分工的规则，最后是你这一层（反应快的那一面，或者拿主意的那一面）自己的规则。\n" +

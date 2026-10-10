@@ -22,6 +22,7 @@ import java.nio.file.Path;
  * <ul>
  *   <li>右键小克：摸头 / 牵手 / 递东西，并用系统消息告诉小克自己的客户端（见 {@link Protocol}）。</li>
  *   <li>右键楼梯、台阶、地毯：坐下（见 {@link Seats}）。</li>
+ *   <li>小克把东西递给别人：对方点聊天栏里的“收下”就直接进背包（见 {@link HandOver}）。</li>
  *   <li>/xiaoke-bridge reload：重新读配置（需要 2 级以上权限）。</li>
  * </ul>
  */
@@ -53,13 +54,18 @@ public final class XiaokeBridge implements ModInitializer {
         UseEntityCallback.EVENT.register(BotInteractions::onUseEntity);
         UseBlockCallback.EVENT.register(Seats::onUseBlock);
         ServerTickEvents.END_SERVER_TICK.register(Seats::onServerTick);
+        ServerTickEvents.END_SERVER_TICK.register(HandOver::onServerTick);
         ServerEntityEvents.ENTITY_LOAD.register(Seats::onEntityLoad);
         ServerEntityEvents.ENTITY_UNLOAD.register(Seats::onEntityUnload);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             Seats.clear();
             BotInteractions.clear();
+            HandOver.clear();
         });
-        CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> registerCommand(dispatcher));
+        CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> {
+            registerCommand(dispatcher);
+            HandOver.register(dispatcher);
+        });
     }
 
     private static void registerCommand(CommandDispatcher<CommandSourceStack> dispatcher) {

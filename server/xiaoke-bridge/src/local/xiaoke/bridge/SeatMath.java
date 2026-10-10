@@ -123,4 +123,21 @@ public final class SeatMath {
                 return null;
         }
     }
+
+    /**
+     * 坐着时按跳跃键起身（原版只认潜行键，有人把潜行键改到了别处，或者根本不知道要按潜行）。
+     * 要先看到一次"没按"，再看到"按下"才算：刚坐下、重新登录被放回座位时一直按着空格，不会马上弹起来。
+     */
+    public static final class JumpLatch {
+        private boolean armed;
+
+        /** 每 tick 喂一次跳跃键现在按没按着；返回 true 表示该起身了。 */
+        public boolean update(boolean jumpDown) {
+            if (!jumpDown) {
+                armed = true;
+                return false;
+            }
+            return armed;
+        }
+    }
 }
