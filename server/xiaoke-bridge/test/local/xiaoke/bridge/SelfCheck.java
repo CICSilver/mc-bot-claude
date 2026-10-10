@@ -19,6 +19,8 @@ public final class SelfCheck {
         configChecks();
         configFileChecks();
         protocolChecks();
+        offerChecks();
+        transferChecks();
         seatMathChecks();
         cooldownChecks();
         System.out.println("SelfCheck: 通过 " + passed + " 项，失败 " + failed + " 项");
@@ -111,6 +113,72 @@ public final class SelfCheck {
         check("hold 格式", Protocol.hold("CICSilver").equals("[xiaoke-bridge] hold CICSilver"));
         check("give 格式", Protocol.give("CICSilver", "cooked_cod", 3).equals("[xiaoke-bridge] give CICSilver cooked_cod 3"));
         check("give-full 格式", Protocol.giveFull("CICSilver", "cooked_cod").equals("[xiaoke-bridge] give-full CICSilver cooked_cod"));
+        check("hand-offered 格式", Protocol.handOffered("CICSilver", "bread", 3).equals("[xiaoke-bridge] hand-offered CICSilver bread 3"));
+        check("hand-error 格式", Protocol.handError("CICSilver", "far").equals("[xiaoke-bridge] hand-error CICSilver far"));
+        check("handed 格式", Protocol.handed("CICSilver", "bread", 2).equals("[xiaoke-bridge] handed CICSilver bread 2"));
+        check("hand-declined 格式", Protocol.handEnd("declined", "CICSilver", "bread").equals("[xiaoke-bridge] hand-declined CICSilver bread"));
+    }
+
+    // ------------------------------------------------------------ 递东西：一组一组挪
+
+    /** 假的一组东西：名字和个数。 */
+    private static final class Fake {
+        final String id;
+        int count;
+        Fake(String id, int count) { this.id = id; this.count = count; }
+    }
+
+    private static final Transfer.Ops<Fake> FAKE = new Transfer.Ops<>() {
+        @Override public boolean isEmpty(Fake s) { return s == null || s.count <= 0; }
+        @Override public String id(Fake s) { return s.id; }
+        @Override public int count(Fake s) { return s.count; }
+        @Override public Fake split(Fake s, int n) { s.count -= n; return new Fake(s.id, n); }
+        @Override public void grow(Fake s, int n) { s.count += n; }
+    };
+
+    private static void transferChecks() {
+        List<Fake> bag = new java.util.ArrayList<>(List.of(new Fake("bread", 2), new Fake("air", 0), new Fake("cod", 5), new Fake("bread", 10)));
+        check("数背包里的面包", Transfer.count(bag, FAKE, "bread") == 12);
+        List<Fake> got = new java.util.ArrayList<>();
+        int moved = Transfer.move(bag, FAKE, "bread", 5, s -> { got.add(s); return null; });
+        check("递 5 个面包就是 5 个", moved == 5);
+        check("先拿第一组，再从第二组补", got.size() == 2 && got.get(0).count == 2 && got.get(1).count == 3);
+        check("她还剩 7 个面包，鳕鱼没动", Transfer.count(bag, FAKE, "bread") == 7 && Transfer.count(bag, FAKE, "cod") == 5);
+
+        int[] room = {4};
+        moved = Transfer.move(bag, FAKE, "bread", 7, s -> {
+            int take = Math.min(room[0], s.count);
+            room[0] -= take;
+            s.count -= take;
+            return s;
+        });
+        check("对方满了只给出去收得下的", moved == 4);
+        check("没给出去的回到她背包", Transfer.count(bag, FAKE, "bread") == 3);
+
+        List<Fake> one = new java.util.ArrayList<>(List.of(new Fake("apple", 1)));
+        moved = Transfer.move(one, FAKE, "apple", 1, s -> s);
+        check("一个都收不下：一个都没给出去", moved == 0);
+        check("整组拿空了又放回来：那一格换成放回来的那组", Transfer.count(one, FAKE, "apple") == 1);
+        check("没有的东西给不出去", Transfer.move(bag, FAKE, "apple", 1, s -> null) == 0);
+    }
+
+    // ------------------------------------------------------------ 递东西的记账
+
+    private static void offerChecks() {
+        Offers offers = new Offers();
+        java.util.UUID bot = java.util.UUID.randomUUID(), a = java.util.UUID.randomUUID(), b = java.util.UUID.randomUUID();
+        Offers.Offer first = offers.create(bot, "clawd", a, "CICSilver", "bread", 3, 1000);
+        check("递出去的能按编号找到", offers.peek(first.id(), a) == first);
+        check("别人点不了递给 TA 的", offers.peek(first.id(), b) == null);
+        Offers.Offer second = offers.create(bot, "clawd", a, "CICSilver", "apple", 1, 2000);
+        check("同一个人只留最新的一份", offers.size() == 1 && offers.peek(first.id(), a) == null && offers.peek(second.id(), a) == second);
+        offers.create(bot, "clawd", b, "Bob", "cod", 1, 30000);
+        check("还没到一分钟的不过期", offers.expire(2000 + Offers.TTL_MS - 1).isEmpty());
+        List<Offers.Offer> gone = offers.expire(2000 + Offers.TTL_MS);
+        check("到一分钟过期，只过期早的那份", gone.size() == 1 && gone.get(0) == second && offers.size() == 1);
+        offers.remove(gone.get(0).id());
+        offers.clear();
+        check("clear 清空", offers.size() == 0);
     }
 
     // ------------------------------------------------------------ 座位高度
@@ -174,6 +242,15 @@ public final class SelfCheck {
                         nearAngle(backYaw, yaw) && Math.abs(backPitch - pitch) < 1.0e-6);
             }
         }
+
+        // 按跳跃起身：先松开过，再按下才算
+        SeatMath.JumpLatch held = new SeatMath.JumpLatch();
+        check("坐下时一直按着空格不起身", !held.update(true) && !held.update(true));
+        check("松开以后不起身", !held.update(false));
+        check("松开后再按下就起身", held.update(true));
+        SeatMath.JumpLatch fresh = new SeatMath.JumpLatch();
+        check("没按不起身", !fresh.update(false) && !fresh.update(false));
+        check("按下起身", fresh.update(true));
     }
 
     private static boolean nearVec(double[] v, double x, double y, double z) {

@@ -3,6 +3,7 @@ package local.xiaoke.bridge;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -55,6 +56,7 @@ final class Seats {
         final Display.ItemDisplay entity;
         final ServerLevel level;
         final BlockPos block;
+        final SeatMath.JumpLatch jump = new SeatMath.JumpLatch();
         UUID riderId;
         int graceUntil;
 
@@ -165,6 +167,9 @@ final class Seats {
         if (stairYaw != null) {
             face(sp, stairYaw);
         }
+        if (!XiaokeBridge.config().isBot(sp.getGameProfile().name())) {
+            showStandUpHint(sp);
+        }
         JUST_SAT.put(sp.getUUID(), System.currentTimeMillis());
         XiaokeBridge.LOG.info("[xiaoke-bridge] {} 坐在 {} ({}, {}, {})",
                 sp.getGameProfile().name(), kind.name().toLowerCase(java.util.Locale.ROOT),
@@ -183,6 +188,18 @@ final class Seats {
         double[] dir = SeatMath.viewVector(yaw, pitch);
         Vec3 eye = sp.getEyePosition();
         sp.lookAt(EntityAnchorArgument.Anchor.EYES, eye.add(dir[0] * 50.0, dir[1] * 50.0, dir[2] * 50.0));
+    }
+
+    /**
+     * 动作栏提示怎么起身。按键用 keybind 组件，客户端按各人自己绑的键显示（有人把潜行改成了 Ctrl）。
+     * 原版坐上去时也会在同一个位置提示"按下 潜行键 来脱离"，这条紧跟在后面发，会把它换掉。
+     */
+    private static void showStandUpHint(ServerPlayer sp) {
+        sp.sendSystemMessage(Component.literal("按 ")
+                .append(Component.keybind("key.sneak"))
+                .append(" 或 ")
+                .append(Component.keybind("key.jump"))
+                .append(" 起身"), true);
     }
 
     // ---------------------------------------------------------------- 座位登记
@@ -307,12 +324,15 @@ final class Seats {
         }
         List<Entity> passengers = e.getPassengers();
         if (!passengers.isEmpty()) {
-            s.riderId = passengers.get(0).getUUID();
-            if (SeatRules.kindOf(s.level.getBlockState(s.block)) == null) {
-                // 方块被挖了或换了：把人放下来，收掉座位
-                UUID rider = s.riderId;
+            Entity rider = passengers.get(0);
+            s.riderId = rider.getUUID();
+            boolean blockGone = SeatRules.kindOf(s.level.getBlockState(s.block)) == null;
+            // 按跳跃键起身（潜行键起身是原版自己处理的，人下来以后走下面"没人坐了"那条路）
+            boolean jumped = rider instanceof ServerPlayer p && s.jump.update(p.getLastClientInput().jump());
+            if (blockGone || jumped) {
+                // 方块被挖了、换了，或者按了跳跃：把人放下来，收掉座位
                 e.ejectPassengers();
-                nudgeUp(server, s, rider);
+                nudgeUp(server, s, s.riderId);
                 removeSeat(s);
             }
             return;

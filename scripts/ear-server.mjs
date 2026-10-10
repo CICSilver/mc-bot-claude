@@ -3,7 +3,7 @@
 // 小克的脑子分成三层（见 scripts/start.mjs），各连一个地址，耳朵按事件类型分给它们：
 // - ws://127.0.0.1:25599/fast  快速反应层：聊天、进出、礼物、注视……来了马上接话。后面附上〔现在〕（问身体要的一行状况）
 // - ws://127.0.0.1:25599/exec  执行脑：派来的活、长活结束、危险、天气……把活做成。后面也附上〔现在〕
-// - ws://127.0.0.1:25599/mind  决策脑：执行脑的汇报、[记下]、提醒、空闲、下线……拿主意。后面附上这段时间快速反应层那边发生的事
+// - ws://127.0.0.1:25599/mind  决策脑：执行脑的汇报、[记下]、提醒、空闲、下线、心情变了……拿主意。后面附上这段时间快速反应层那边发生的事
 // 耳朵也是她跟服务器控制台之间的一根线：身体想冒气泡、喵一声、冒爱心时 POST /effect，耳朵换成调用数据包 xiaoke_fx 的命令（world-fx.mjs）
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,8 +23,20 @@ const NICK = process.env.MC_BOT_NICK ?? "小克";
 const COMPANIONS = new Set((process.env.MC_COMPANIONS ?? "").split(",").map(s => s.trim()).filter(Boolean));
 const COMPANION_CHAT_MS = Number(process.env.COMPANION_CHAT_SECONDS ?? 60) * 1000;
 const isBot = who => who === SELF || COMPANIONS.has(who);
-// 她的名字：聊天里带上就是在叫她。昵称（测试号是“小克test”）、去掉 test 的、登录名都算
-const MY_NAMES = [...new Set([NICK, NICK.replace(/test$/i, ""), "小克", SELF, SELF.replace(/_test$/i, "")])].filter(n => n.length >= 2).map(n => n.toLowerCase());
+// 她的名字：聊天里带上就是在叫她。只认她自己的：昵称（测试号是“小克test”）、去掉 test 的昵称、登录名。
+// 10-09：以前还写死了“小克”、把登录名去掉 _test 也算，测试号 clawd_test 就把正式号的 clawd 当成了自己，访客叫正式的 clawd 时测试号也以为在叫她
+export function myNames(nick, login) {
+	return [...new Set([nick, nick.replace(/test$/i, ""), login].map(n => n.trim().toLowerCase()))].filter(n => n.length >= 2);
+}
+const MY_NAMES = myNames(NICK, SELF);
+// 聊天里有没有叫她的名字。别人的登录名里含着她的名字（正式号 clawd、测试号 clawd_test）时，先把别人的名字抹掉再找，
+// 免得访客叫 clawd_test 时正式的 clawd 也以为在叫她
+export function mentionsMe(text, names, others = []) {
+	let t = text.toLowerCase();
+	const longer = [...new Set(others.map(o => o.toLowerCase()))].filter(o => !names.includes(o) && names.some(n => o.includes(n)));
+	for (const other of longer.sort((a, b) => b.length - a.length)) t = t.replaceAll(other, " ");
+	return names.some(n => t.includes(n));
+}
 // 别人的别名（admin=CICSilver）：聊天里叫“admin”就是在跟 CICSilver 说
 const ALIASES = Object.fromEntries((process.env.MC_ALIASES ?? "").split(",").map(s => s.split("=").map(x => x.trim())).filter(p => p.length === 2 && p[0] && p[1]));
 // 有人在线、决策脑却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
@@ -45,6 +57,9 @@ const SIDE = process.env.MC_SIDE ?? "";
 // 服务器上 MC 的目录（检查数据包和 server.properties 用）：开着的那个服的
 const SERVER_DIR = process.env.MC_SERVER_DIR ? `'${process.env.MC_SERVER_DIR}'` : `$(mc-active dir ${SIDE})`;
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"];
+// 测试（scripts/ear-review.test.mjs）只拿这里导出的几个判断函数用：EAR_TEST=1 时不开端口、不连服务器、不起定时器
+const LIVE = process.env.EAR_TEST !== "1";
+const every = (fn, ms) => { if (LIVE) setInterval(fn, ms); };
 
 // 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd”
 const NAME = "(?:\\[[^\\]]*\\] )?([A-Za-z0-9_]{1,16})";
@@ -72,6 +87,8 @@ const ROUTES = {
 	转告: [FAST],
 	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
 	互动: [FAST], 看见: [FAST], 游戏: [FAST],
+	// 心情变了一档（身体算的，只有说法和原因）：嘴巴冒一句或做个表情，决策脑想想要不要改打算
+	心情: [FAST, MIND],
 	进展: [EXEC], 天气: [EXEC], 提醒: [MIND], 空闲: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
 };
 
@@ -79,7 +96,7 @@ const online = new Set();      // 在线的真人访客
 const companionsOnline = new Set();
 const clients = { [FAST]: new Set(), [EXEC]: new Set(), [MIND]: new Set() };
 const pending = { [FAST]: [], [EXEC]: [], [MIND]: [] };   // 那一层没在听时攒下的事件，等它连上再一起给
-// 只叫醒了快速反应层的事（还有小克自己在聊天里说的话），攒着，下次叫醒决策脑时一起给它看
+// 只叫醒了快速反应层的事（还有小克自己在聊天里说的话、旁听到的话），攒着，下次叫醒决策脑时一起给它看。每条是 { text, overheard }
 const digest = [];
 // 旁边的人在聊、不是对她说的话：不叫醒谁，下次叫醒快速反应层时附在后面（3 分钟内的，最多 6 句），给过一次就清掉
 const overheard = [];
@@ -127,14 +144,36 @@ function deliver(layer, text) {
 	for (const socket of clients[layer]) socket.write(frame(text));
 }
 
-function remember(entry) {
-	digest.push(entry.length > 200 ? `${entry.slice(0, 200)}…` : entry);
-	while (digest.length > 40 || digest.join(" ／ ").length > 3000) digest.shift();
+// ---- 给决策脑看的“这段时间嘴巴那边” ----
+// overheard 的是旁边的人互相在聊、不是对她说的（[旁听]）。10-09：不是对她说的话不叫醒任何一层（也不花额度），
+// 所以它们只在决策脑因为别的事醒来时顺带给它看，自己不算“嘴巴那边一直热闹”，不触发 [回顾]
+const DIGEST_MAX = 40, DIGEST_CHARS = 3000, DIGEST_OVERHEARD_MAX = 12;
+export function addToDigest(entries, text, overheard = false) {
+	entries.push({ text: text.length > 200 ? `${text.slice(0, 200)}…` : text, overheard });
+	// 太多了先丢最早的 [旁听]：它们不叫醒决策脑、攒得久，别让别人一直在聊把嘴巴那边真发生的事挤掉
+	const tooMany = () => entries.length > DIGEST_MAX || entries.map(e => e.text).join(" ／ ").length > DIGEST_CHARS
+		|| entries.filter(e => e.overheard).length > DIGEST_OVERHEARD_MAX;
+	while (tooMany()) {
+		const i = entries.findIndex(e => e.overheard);
+		entries.splice(i >= 0 ? i : 0, 1);
+	}
+}
+export function formatDigest(entries) {
+	if (!entries.length) return "";
+	const note = entries.some(e => e.overheard) ? "。标着 [旁听] 的是旁边的人互相在聊，不是对你说的，嘴巴也没接话" : "";
+	return `　（这段时间嘴巴那边：${entries.map(e => e.text).join(" ／ ")}${note}）`;
+}
+// 该不该叫决策脑 [回顾]：嘴巴那边真跟人打过交道（只有 [旁听] 不算），决策脑又有这么久没被叫醒了
+export function reviewDue(entries, sinceMindMs, reviewMs = REVIEW_MS) {
+	return sinceMindMs >= reviewMs && entries.some(e => !e.overheard);
+}
+
+function remember(entry, overheard = false) {
+	addToDigest(digest, entry, overheard);
 }
 
 function takeDigest() {
-	if (!digest.length) return "";
-	return `　（这段时间嘴巴那边：${digest.splice(0).join(" ／ ")}）`;
+	return formatDigest(digest.splice(0));
 }
 
 async function withSnapshot(line, layer) {
@@ -163,7 +202,7 @@ async function addressedToMe(who, text) {
 	const others = [...online].filter(n => n !== who).length + companionsOnline.size;
 	if (!others) return { to: true, why: "" };
 	const t = text.toLowerCase();
-	if (MY_NAMES.some(n => t.includes(n))) return { to: true, why: "" };
+	if (mentionsMe(text, MY_NAMES, [...online, ...companionsOnline, ...COMPANIONS])) return { to: true, why: "" };
 	const named = [...online, ...companionsOnline].filter(n => n !== who && t.includes(n.toLowerCase()))
 		.concat(Object.entries(ALIASES).filter(([alias, real]) => real !== who && t.includes(alias.toLowerCase())).map(([, real]) => real));
 	if (named.length) return { to: false, why: `在跟 ${named[0]} 说` };
@@ -189,7 +228,7 @@ function visitorChat(who, text) {
 		console.log(`${ts()} [旁听] ${who}: ${text}（${why}）`);
 		overheard.push({ at: Date.now(), line: `${who}: ${text}` });
 		if (overheard.length > 12) overheard.shift();
-		remember(`${ts().slice(6)} ${who}（${why}）: ${text}`);
+		remember(`${ts().slice(6)} [旁听] ${who}: ${text}（${why}）`, true);   // 决策脑下次醒来顺带看看，不为它叫醒决策脑
 	}).catch(e => console.log(`${ts()} 分聊天出错：${e}`));
 }
 
@@ -225,7 +264,7 @@ async function mindIdleMs() {
 	}
 }
 
-setInterval(async () => {
+every(async () => {
 	if (!online.size || !clients[MIND].size || Date.now() < busyUntil) return;
 	if (await mindIdleMs() < idleWait) return;
 	idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
@@ -343,10 +382,10 @@ function handleFrame(socket, buf) {
 
 // 小克的 MCP（身体）发来的消息：后台长活结束了（进展）、她给自己定的提醒到了（提醒）、有人扔东西给她（礼物）、下雨雨停（天气）、
 // 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给决策脑的事（记下）、决策脑托快速反应层说的话（转告）、
-// 决策脑派给执行脑的活（任务）、执行脑回报决策脑（汇报）、开始 / 结束忙
+// 决策脑派给执行脑的活（任务）、执行脑回报决策脑（汇报）、心情变了一档（心情）、开始 / 结束忙
 function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "任务", "汇报", "琢磨", "闲聊", "互动", "看见", "游戏"].includes(data.kind) && typeof data.text === "string") {
+	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "任务", "汇报", "琢磨", "闲聊", "互动", "看见", "游戏", "心情"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
@@ -410,7 +449,7 @@ http.on("error", e => {
 	if (e.code === "EADDRINUSE") { console.log(`端口 ${PORT} 已被占用，应该已经有一个耳朵在运行了`); process.exit(0); }
 	throw e;
 });
-http.listen(PORT, "127.0.0.1", () => {
+if (LIVE) http.listen(PORT, "127.0.0.1", () => {
 	mkdirSync("logs", { recursive: true });
 	writeFileSync("logs/ear.pid", String(process.pid));
 	console.log(`${ts()} ${NICK}（${SELF}）的耳朵在 ws://127.0.0.1:${PORT}/fast、/exec 和 /mind 等着${COMPANIONS.size ? `，AI 同伴：${[...COMPANIONS].join(" ")}` : ""}`);
@@ -477,14 +516,15 @@ function worldEffect(effect) {
 	return true;
 }
 
-// 快速反应层那边一直在跟人打交道，决策脑好一阵没被叫醒：叫它回顾一下，看看有没有要记下、要改打算的
-setInterval(() => {
-	if (!digest.length || !clients[MIND].size || Date.now() - lastMindAt < REVIEW_MS) return;
-	emit("回顾", "这段时间嘴巴那边一直在跟人打交道。看看有没有要记下来、要改打算的；别人的话嘴巴那边已经回过了，你不用再回");
+// 快速反应层那边一直在跟人打交道，决策脑好一阵没被叫醒：叫它回顾一下，看看有没有要记下、要改打算的。
+// 只有 [旁听] 不叫（10-09：她干长活时访客互相聊天，不该把决策脑叫醒）
+every(() => {
+	if (!clients[MIND].size || !reviewDue(digest, Date.now() - lastMindAt)) return;
+	emit("回顾", "这段时间嘴巴那边一直在跟人打交道。看看有没有要记下来、要改打算的；对你说的话嘴巴那边已经回过了，你不用再回");
 }, 30 * 1000);
 
 // 世界里只剩小克一个人太久了：提醒她收拾收拾、自己下线
-setInterval(() => {
+every(() => {
 	if (aloneSince === null || aloneWarned || !clients[MIND].size || Date.now() - aloneSince < ALONE_MS) return;
 	aloneWarned = true;
 	emit("独处", `世界里只剩你一个人已经 ${Math.round((Date.now() - aloneSince) / 60000)} 分钟了。把手上的事收个尾，东西放好，写完日记，然后自己下线吧`);
@@ -493,7 +533,7 @@ setInterval(() => {
 // 直接点 X 关掉小克的窗口时，启动器来不及关耳朵：看得到启动器的进程号就跟着它走；
 // 看不到的话，太久没有小克来听（她的 Monitor 每 30 分钟重连一次），就自己退出
 let lastListened = Date.now();
-setInterval(() => {
+every(() => {
 	if (PARENT_PID) {
 		try { process.kill(PARENT_PID, 0); }
 		catch { console.log(`${ts()} 启动器不在了，耳朵也关掉`); process.exit(0); }

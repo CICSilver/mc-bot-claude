@@ -1,6 +1,7 @@
 // 一局的日志归到一处，她下线时传到服务器上，换台电脑要看就拉下来。服务器上只留最近两天的，不进 git。
 // 一局一个文件夹 logs/runs/<日期>_<时分>_<main|test>_<登录名>/：
 //   ear.log、body.log              这一局耳朵和身体写的那一段（logs/ 里的是一直往后接着写的）
+//   analysis.jsonl                 这一局心情的分析日志（每件事前后的数、跨档、心结）。logs/analysis.jsonl 每局开始时清掉，只装这一局的
 //   fast.jsonl、exec.jsonl、mind.jsonl  三层各自的会话记录（Claude Code 存在 ~/.claude/projects 下，换台电脑就看不到了）
 //   prompt-fast.md 这些             这一局三层用的设定
 //   run.json                       什么时候开始和结束、哪台电脑、哪个服、模型和思考强度、两个仓库在哪个提交
@@ -29,6 +30,8 @@ const REMOTE = "~/xiaoke-logs";
 const TAR = process.platform === "win32" && existsSync(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"))
 	? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 const LAYERS = ["fast", "exec", "mind"];
+// 身体写的心情分析日志（start.mjs 用 XIAOKE_ANALYSIS 告诉身体写到这里）
+const ANALYSIS = join(LOGS, "analysis.jsonl");
 
 const size = file => { try { return statSync(file).size; } catch { return 0; } };
 const pad = n => String(n).padStart(2, "0");
@@ -41,6 +44,9 @@ export function beginRun({ side, login, world, layers, mcp }) {
 	if (existsSync(CURRENT)) {
 		try { finishRun(); } catch (e) { console.warn(`上一局的日志没能收好：${e.message}`); }
 	}
+	// 心情的分析日志不像 body.log 那样一直往后接：上一局的上面已经收进它的文件夹了，这里清掉，这一局从空的开始。
+	// 清不掉（比如被占着）也没关系，下面记下从哪开始，收尾时只拿这一局的那段
+	try { rmSync(ANALYSIS, { force: true }); } catch { /* 清不掉就按位置截 */ }
 	const started = new Date();
 	const run = {
 		id: `${stamp(started)}_${side || "unknown"}_${login}`,
@@ -50,6 +56,7 @@ export function beginRun({ side, login, world, layers, mcp }) {
 		commits: { bot: `${branch(ROOT)} ${commit(ROOT)}`, mcp: mcp ? `${branch(mcp)} ${commit(mcp)}` : "" },
 		earStart: size(join(LOGS, "ear.log")),
 		bodyStart: size(join(LOGS, "body.log")),
+		analysisStart: size(ANALYSIS),
 	};
 	mkdirSync(LOGS, { recursive: true });
 	writeFileSync(CURRENT, JSON.stringify(run, null, 2));
@@ -83,6 +90,8 @@ export function finishRun() {
 	mkdirSync(dir, { recursive: true });
 	copyTail(join(LOGS, "ear.log"), join(dir, "ear.log"), run.earStart ?? 0);
 	copyTail(join(LOGS, "body.log"), join(dir, "body.log"), run.bodyStart ?? 0);
+	// 心情关着时身体不写分析日志，就不放空文件
+	if (existsSync(ANALYSIS)) copyTail(ANALYSIS, join(dir, "analysis.jsonl"), run.analysisStart ?? 0);
 	let sessions = {};
 	try { sessions = JSON.parse(readFileSync(join(LOGS, "sessions.json"), "utf8")); } catch { /* 没有 */ }
 	const missing = [];

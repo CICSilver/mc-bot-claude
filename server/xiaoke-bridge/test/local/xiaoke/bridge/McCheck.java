@@ -37,6 +37,7 @@ public final class McCheck {
         stairFacingChecks();
         attachmentChecks();
         blockTagChecks();
+        handOverChecks();
 
         System.out.println("McCheck: 通过 " + passed + " 项，失败 " + failed + " 项");
         System.exit(failed > 0 ? 1 : 0);
@@ -152,6 +153,13 @@ public final class McCheck {
 
     private static boolean near(double a, double b) {
         return Math.abs(a - b) < 1.0e-6;
+    }
+
+    // 递东西：命令里的物品 id 和注册表里的对得上
+    private static void handOverChecks() {
+        check("面包的 id 是 bread", net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(net.minecraft.world.item.Items.BREAD).getPath().equals("bread"));
+        check("命令里写了命名空间、大写也认", HandOver.stripNamespace("minecraft:Bread").equals("bread"));
+        check("没写命名空间照旧", HandOver.stripNamespace("cooked_cod").equals("cooked_cod"));
     }
 
     private static void check(String name, boolean ok) {

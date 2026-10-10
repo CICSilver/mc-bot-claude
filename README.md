@@ -2,13 +2,14 @@
 
 住在 MC 服务器 `mc.lemalin.icu` 里的 AI 玩家：这个世界土生土长的原住民，一只隐居的猫猫“小克”。由 Claude Code 驱动，自己找地方安家、盖房、种田、养动物，会记日记、记住每个访客、跟大家慢慢变熟。
 
-> **这个分支（`claude/dual-mind`）是测试版小克**，跟正式的小克分开，可以同时在线：
+> **这个分支（`claude/three-layer`）是测试版小克**，跟正式的小克分开：正式的 clawd 跑的是 `main` 分支，在另一份目录里；这一份只用来测试。
 > - 登录名 `clawd_test`，耳朵端口 25612、身体端口 25613（正式版是 clawd、25599、25598）
+> - 正式服和测试服共用 `mc.lemalin.icu` 一个入口，同一时间只开一个（见下面“服务器：正式服和测试服”），所以测试版和正式版不会同时在线：测试前在服务器上 `mc-switch test`，测完 `mc-switch main` 切回来。正式服封禁了 clawd_test，测试服封禁了 clawd，走错了也进不去
 > - 记忆和好感度在 `test-home/`（不进 git），跟正式版分开、一直接着用。第一次启动时从 `memory-blank/` 的空白记忆开始；想让测试版从头来过，删掉 `test-home/memory` 和 `test-home/state` 再启动
 > - 皮肤和 clawd 是同一套：服务器 `world/skinrestorer/` 里把 clawd 的那份复制给了 clawd_test 的 UUID（`bbb85730-…`）
 > - 服务器数据包的 `/trigger xiaoke_*`（安家、传送回家、应急口粮、召唤、下线）只认 clawd，测试版用不了；队伍前缀 `[小克]` 也没有
-> - 正式的小克 clawd 在测试版眼里是 AI 同伴（跟大肥鱼一样，不算访客，限频转发）；反过来正式版那边会把 clawd_test 当成访客
-> - 这些都在 `config/xiaoke-body.json` 里，合回正式版时改回 clawd、25599/25598、`"home": "."`、去掉 `datapackTriggers`
+> - `XIAOKE_COMPANIONS` 里还写着 clawd：以前两个能在同一个世界碰到时，测试版把正式版当 AI 同伴（不算访客，限频转发）。现在两个世界分开，碰不到了
+> - 这些都在 `config/xiaoke-body.json` 里（`world` 是 `测试世界`）。合回 `main` 时保留 main 上那份（clawd、25599/25598、`"home": "."`、`"world": "正式世界"`、没有 `datapackTriggers` 和 `XIAOKE_HOME_ZONE`）
 
 ## 怎么启动
 
@@ -60,7 +61,7 @@
   - `手册/*.md`：盖房子、种田和动物、工具和合成、出门在外、留下痕迹、一起玩的东西这些查一下就够的技术，只写“怎么做”。每本开头一行 `> 什么时候读：……`，启动器会自动把它拼成手册目录放进决策脑的设定，她要做这些事之前会先用 Read 读一遍（快速反应层读不了 `prompts/`，用不上手册）
 - 两边说法对不上时：安全、传送、下线、工具、机制和两层分工上的限制以 `系统/` 为准；在限制之内想做什么、做成什么样，按 `小克/` 来。拼出来的设定开头写着这条
 - 两层在记忆所在的 home 里跑，只读得到 home 里的文件。home 不是本目录（比如测试号的 `test-home/`）时，启动器每次都把手册和参考拷一份进去（`test-home/手册`、`test-home/参考`），设定里的路径也跟着写成那里
-- 启动时 `scripts/prompt.mjs` 给每一层拼一份：人格 + 生活 + 共用（+ 测试版）+ 这一层的规则（决策脑再加手册目录和参考目录），写到 `logs/prompt-*.md`（`{{LOGIN}}`、`{{EAR}}` 换成登录名和耳朵地址），**完全替换** Claude Code 原有的系统提示词。`<!-- -->` 里的注释会去掉，可以放心写给自己看的说明
+- 启动时 `scripts/prompt.mjs` 给每一层拼一份：人格 + 生活 + 共用（+ 测试版）+ 这一层的规则（执行脑和决策脑再加手册目录，决策脑另加参考一共几份、有哪些标签），写到 `logs/prompt-*.md`（`{{LOGIN}}`、`{{EAR}}` 换成登录名和耳朵地址），**完全替换** Claude Code 原有的系统提示词。`<!-- -->` 里的注释会去掉，可以放心写给自己看的说明
 - 拼的时候会检查：手册有没有写“什么时候读”、提到的手册在不在、提到的工具名和表情名 MCP 里有没有。对不上会在启动窗口里打一行“设定检查：……”提醒，不会拦着启动。改完设定可以运行 `node scripts/prompt.mjs`（测试号加 `--test`）先看看拼出来的样子，写在 `logs/prompt-*.preview.md`
 
 ## 她是怎么“一直活着”的
@@ -158,7 +159,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 生存（`src/tools/survival-tools.ts`）：`get-status` 生命/饱食度/时间/在忙什么、`eat` 吃东西、`use-item-on-block` 耕地播种撒骨粉、用桶舀水倒水（看着水面用手里的东西，对着方块右键桶是装不上水的）、`attack-entity` 打猎自卫（按武器的冷却挥；血 8 以下不对怪开打，打着打着掉到 8 以下就停手交给本能跑；死了会照实说）、`pick-up-items` 捡掉落物、`dig-path-to` 卡住时挖路或垫方块脱困、`look-around` 看看周围有什么、`sleep-in-bed` / `wake-up` 睡觉起床
 - 后台长活（`src/jobs.ts`、`src/tools/job-tools.ts`）：`gather-blocks` 砍树、挖露在外面的矿、采花，`dig-tunnel` 照玩家的习惯开矿道（默认 3×3 一段一段往前推，可以往下挖台阶；`follow` 跟着某人在 TA 身后补成这个大小，`copy` 照已经挖的那段的样子接着挖；碰到岩浆和水停、地上有洞垫上、暗处插火把），`inspect-tunnel` 只看不挖、量一下某人挖的洞朝哪多宽多高（三层都能用），`harvest-crops` 收庄稼并补种，`go-fishing` 钓一阵子鱼，`explore` 往一个方向探险、找到想找的东西就停，`lure-animals` 拿着吃的把动物引过去，`stop-job` 停下。会自己换工具、捡掉落物，遇到天黑、来怪、受伤、饿了、背包满了就停下
 - 动作队列（`do-steps`，`src/tools/steps-tools.ts`，参考 airi 的 action queue）：好几步的跑腿（从箱子拿东西、合成、走过去、放下、存东西……）写成一串交给身体，后台一步步做，马上返回，全做完或者哪一步不行才报一次 [进展]，不用每走一步都回去问一次模型。每一步就是调对应的工具（在身体里登记了一份，参数照样校验，交上来时先整串查一遍），按回复的开头认成没成，认不出的当没成、停下来。不行的那一步暂停着，补上缺的东西 `resume-job` 从那一步接着做；陪人、躲怪照样暂停、自己接着做；`append` 往正在做的一串后面接
-- 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低（最后写着地形标签），`find-inspiration`（`src/inspiration.ts`）按地形和想要的东西找参考，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、门和栅栏门、用 “.” 挖空），`build-house` 应急的方盒子小屋（背包里有木门就装上），`build-fence` 围栅栏（有栅栏门就装在口子上），`make-farm` 开垦农田并播种、可以在中间放水。都会先让服务器重发背包、再核对材料，缺的会说背包里有什么能顶上（`src/substitutes.ts`），`build-saved-blueprint` 填 `swap` 就能换
+- 盖东西（`src/building.ts`）：`survey-terrain` 看一块地的高低（开头那段说明里写着地形标签，耕地画成 “=”，这块地上认出来的田、动物圈、告示牌也写在那里），`find-inspiration`（`src/inspiration.ts`）按地形和想要的东西找参考，`find-building-spot` 找平地，`build-blueprint` 照她自己画的分层图纸盖（支持楼梯朝向、上下半砖、横放原木、挂灯笼、门和栅栏门、用 “.” 挖空；三层版里哪一层都没有它，是决策脑 `save-blueprint` 存图纸、执行脑 `build-saved-blueprint` 按名字盖），`build-house` 应急的方盒子小屋（背包里有木门就装上），`build-fence` 围栅栏（有栅栏门就装在口子上），`make-farm` 开垦农田并播种、可以在中间放水。都会先让服务器重发背包、再核对材料，缺的会说背包里有什么能顶上（`src/substitutes.ts`），`build-saved-blueprint` 填 `swap` 就能换
 - 好感度和礼物（`src/relationships.ts`、`src/gifts.ts`、`src/tools/relationship-tools.ts`）：`get-relationships`、`change-affinity`（一次 -30～+15，每人每天最多涨 25，心上人只能有一个）。阶段和门槛在 `src/relationships.ts` 的 `STAGES` 里
 - 本能（`src/senses.ts`）：天气、注视、危险事件，转头看人，`run-away` 逃跑；`chase-animal` 追着小动物玩。`XIAOKE_COMPANIONS` 里的 AI 同伴不算“盯着看”。下雨不再让长活停下（10-09 改的，只让她心情差一点）；在水里会浮起来、游上岸，头在水下快憋不住时放下一切去换气（只走水里过得去的路，栈道底下也游得出来）。长活在地下挖的时候，身边没有光就先回头在身后插一支火把（看头顶是不是天然的石头泥土，不看亮度：26.1 上读到的亮度不准）
 - 熔炉（`src/tools/furnace-tools.ts`）：`smelt-item` 放进去就返回，烧好了发 [进展]；`take-from-furnace` 取出来
@@ -166,7 +167,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 箱子（`src/tools/container-tools.ts`）：`open-container`、`take-item`、`store-item`。拿到、存进的比要的少会如实说（`Partly took` / `Partly stored`），回复里只说这一样东西现在有多少；关箱子以后先让服务器重发一遍背包，再按服务器给的数核对
 - 合成（`src/tools/crafting-tools.ts`）：只做成一部分时回复 `Partly crafted`，写清做成几次、为什么停、现在有多少，`do-steps` 不会把它当成功接着做下一步；合成完也跟服务器核对一遍背包
 - 背包同步（`src/inventory-sync.ts`）：开着箱子时服务器改了背包，箱子窗口里那份背包副本也跟着改，关箱子时 mineflayer 就不会把旧的抄回去
-- 互动（`src/tools/interaction-tools.ts`）：`drop-item` 丢东西或扔给某个玩家、`use-item-on-entity` 喂养/驯服/繁殖/剪毛、`fish` 钓一竿
+- 互动（`src/tools/interaction-tools.ts`）：`drop-item` 丢东西或给某个玩家（`src/handover.ts`：走服务器模组 xiaoke-bridge 的 `/xiaoke-hand` 递到对方手里，对方聊天栏里出现只有 TA 看得见的“收下 / 不用了”，点收下直接进背包，最多等 20 秒；服务器做不到才扔在 TA 跟前，填 `toss` 也是直接扔）、`use-item-on-entity` 喂养/驯服/繁殖/剪毛、`fish` 钓一竿
 - `set-reminder` 给自己定提醒（最多 5 个、最长 60 分钟）；`logout` 下线（下线后不会再自动重连）
 - 结束长活、提醒到点、收到礼物时，通过 `src/ear-link.ts` 告诉耳朵（地址配在 `XIAOKE_EAR_URL`）
 - 两层脑子共用一个身体（`src/main.ts`、`src/http-server.ts`、`src/roles.ts`）：加 `--http-port` 时以 HTTP 方式常驻（无状态，每个请求现建一个 McpServer，机器人、长活、陪伴、提醒都共用），`/mcp/fast`、`/mcp/mind`、`/mcp` 三个地址按层给工具；只认 Host 是 127.0.0.1 / localhost 的请求；`--parent-pid` 指的进程（启动器）没了就让机器人下线、自己退出。不加 `--http-port` 还是原来的 stdio，所有工具都给（大肥鱼照样能用）
@@ -184,8 +185,9 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 视距只要 4 个区块（`XIAOKE_VIEW_DISTANCE` 可改）：服务器出口只有约 5 Mbps，按服务器视距 10 推区块会把带宽占满好几秒，真人玩家会卡住。实测视距 4 进服 1.3 MB（原来 4.5 MB），身边 80 格内仍然都是加载好的
 - 挑工具（`src/tool-choice.ts`）：换掉了 mineflayer-pathfinder 的 `bestHarvestTool`（没有比空手快的工具时它会随手拿背包第一件东西，于是拿镐挖土），并包住 `bot.dig`：所有挖掘都先换上真正更快的工具，用不上工具时不拿会磨损的东西，草和花不换工具；换装备排队进行；工具坏了、快坏了会写进 [进展] 和 `dig-block` 的回复，`list-inventory` 显示每件还能用几次
 - 盔甲（`src/armor.ts`）：背包里有更好的盔甲就自动穿上（皮 < 铜 < 金 < 锁链 < 铁 < 钻石 < 下界合金），干后台长活时等闲下来再换；`get-status` 显示身上穿着什么
-- 表情（`src/expressions.ts`、`src/tools/expression-tools.ts`）：`emote` 18 种表情（身体动作 + 猫叫 + 粒子，干活、坐船时只转头）；`murmur` 头顶的气泡；`send-chat` 可以带 `emote`；深想时的“……”气泡（`idle.ts` 开关）。声音和粒子、气泡通过 `ear-link.ts` 的 `worldEffect` 交给耳朵。表情和 `crouch` 结束时只还原自己动过的（本来蹲着就还蹲着），坐在船里不蹲（一蹲就下船了）
+- 表情（`src/expressions.ts`、`src/tools/expression-tools.ts`）：`emote` 18 种表情（身体动作 + 猫叫 + 粒子；干活、走路时身体让给手上的事，只有猫叫和粒子；坐船、坐矿车、坐在座位上时只做点头、摇头这种转头的）；`murmur` 头顶的气泡；`send-chat` 可以带 `emote`；深想时的“……”气泡（`idle.ts` 开关）。声音和粒子、气泡通过 `ear-link.ts` 的 `worldEffect` 交给耳朵。表情和 `crouch` 结束时只还原自己动过的（本来蹲着就还蹲着），坐在船里不蹲（一蹲就下船了）
 - 被碰到（`src/touch.ts`）：冲她蹲、摸头、挥手、戳、打、雪球砸（`damage_event` 里的来源），身边人血少、拿着鱼。AI 同伴只算打她
+- 田和地方（`src/farmland.ts`、`src/places.ts`，10-09）：站在耕地上、或者这一跳会落到耕地上就不跳（会把田踩回泥土）；寻路走田里每格贵一点、跳上去落上去更贵，能绕就绕。身边的告示牌隔几秒读一遍：写着“鸡圈”“田”“别进”就把那一圈认出来，没插牌子的连片耕地自己就是一块田；盖房子、围栅栏、`place-block` 不压上去，`find-building-spot` 跳过，〔现在〕里写着“附近的地方”，新看到的告示牌发一次 [看见]
 - 她的东西（`src/belongings.ts`）：记住她放下的方块（mineflayer 的 `blockPlaced`，门和床的另一半，锄地播种），别人挖掉、踩田、开箱子、杀圈里的动物、回来发现不见了、有访客走进她家；她自己挖的、庄稼长大、没种东西的田变回泥土不算。`claim-home` 把这个功能之前盖的东西认作她的
 - 留下痕迹（`src/tools/trace-tools.ts`）：`put-sign` 立告示牌或改写自己的牌子；`write-book` 写书（填 title 就署名）；`read-book` 读背包里或讲台上的书；`name-item` 在铁砧给东西起名（命名牌）；`look-around` 会念出附近告示牌上的字
 - 跟服务器模组 xiaoke-bridge 对接（`src/touch.ts`、`src/gifts.ts`、`src/games.ts`、`src/idle.ts`）：只认系统消息 `[xiaoke-bridge] pet|hold|give|give-full ...`（玩家打的字、私聊都不是系统消息，冒充不了）；`ride` 的 kind=seat 空着手右键楼梯、半砖、地毯坐下。站起来统一用 `standUp`：mineflayer 的 `bot.dismount()` 发的是“跳”，26.1 只认潜行，所以按一下潜行
@@ -244,7 +246,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 
 ## 接下来要做的
 
-现在做到哪、接下来的顺序记在 [下一步.md](下一步.md)；心情和记忆（经历、惦记、联想、recall）10-08 商量定的方案在 [心情和记忆.md](心情和记忆.md)，还没动手。
+现在做到哪、接下来的顺序记在 [下一步.md](下一步.md)；心情和记忆的方案在 [心情和记忆.md](心情和记忆.md)。第 1 段已实现：身体事件和 `feel` 影响心情，近期记录和心结存进 `state/mood.json`，分析日志随每局归档；〔现在〕只写说法和原因，身体会开心绕朋友、对有心结的人走开。聊天夸奖由快速反应层记，决策脑只记自己的经历，避免重复；`config/xiaoke-body.json` 写 `"mood": false` 可关闭。长期记忆整理、联想和惦记留在第 2、3 段，三层模型联调的验证范围见计划。
 
 ## 想改点什么
 
