@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CODEX_RUNTIME = join(ROOT, '.runtime', 'codex-home');
 export const DEFAULTS = {
-  fast: { model: 'gpt-6-luna', effort: 'low' },
-  exec: { model: 'gpt-6.1-sol', effort: 'low' },
+  fast: { model: 'gpt-6.1-sol', effort: 'low' },
+  exec: { model: 'gpt-6.1-sol', effort: 'medium' },
   mind: { model: 'gpt-6.1-sol', effort: 'high' },
 };
 export const DISABLED_FEATURES = [

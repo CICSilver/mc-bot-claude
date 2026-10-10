@@ -44,8 +44,8 @@ npm run watch
 
 | 层 | 默认模型 | 思考强度 | 职责 |
 | --- | --- | --- | --- |
-| 快层 fast | gpt-6-luna | low | 聊天、表情、即时反应 |
-| 执行 exec | gpt-6.1-sol | low | 接任务、调游戏工具、汇报结果 |
+| 快层 fast | gpt-6.1-sol | low | 聊天、表情、即时反应 |
+| 执行 exec | gpt-6.1-sol | medium | 接任务、调游戏工具、汇报结果 |
 | 决策 mind | gpt-6.1-sol | high | 做打算、派活、写记忆和日记 |
 
 修改 `config/xiaoke-body.json` 的 `layers`，或临时设置 `XIAOKE_FAST_MODEL`、`XIAOKE_EXEC_EFFORT` 等环境变量。配置直接交给 Codex，不设模型名单或 CLI 版本门槛。
