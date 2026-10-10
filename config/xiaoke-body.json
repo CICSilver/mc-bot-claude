@@ -16,12 +16,12 @@
   },
   "layers": {
     "fast": {
-      "model": "gpt-6-luna",
+      "model": "gpt-6.1-sol",
       "effort": "low"
     },
     "exec": {
       "model": "gpt-6.1-sol",
-      "effort": "low"
+      "effort": "medium"
     },
     "mind": {
       "model": "gpt-6.1-sol",
