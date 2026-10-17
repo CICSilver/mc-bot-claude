@@ -41,8 +41,8 @@ export function mentionsMe(text, names, others = []) {
 const ALIASES = Object.fromEntries((process.env.MC_ALIASES ?? "").split(",").map(s => s.split("=").map(x => x.trim())).filter(p => p.length === 2 && p[0] && p[1]));
 // 有人在线、决策脑却闲了一阵（这一轮结束后没再动，也没在干长活），就叫醒它一次（[空闲]），间隔每次在这个范围里随机。
 // 快速反应层那边的聊天不算决策脑的动静
-const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 60) * 1000;
-const IDLE_MAX_MS = Number(process.env.IDLE_MAX_SECONDS ?? 150) * 1000;
+const IDLE_MIN_MS = Number(process.env.IDLE_MIN_SECONDS ?? 30) * 1000;
+const IDLE_MAX_MS = Number(process.env.IDLE_MAX_SECONDS ?? 60) * 1000;
 // 快速反应层那边一直热闹、决策脑这么久没被叫醒过，就叫它回顾一下（[回顾]）
 const REVIEW_MS = Number(process.env.REVIEW_MINUTES ?? 4) * 60 * 1000;
 // 世界里只剩小克一个人这么久，就提醒她收拾收拾下线（[独处]）
@@ -274,8 +274,8 @@ async function mindIdleMs() {
 	try {
 		const res = await fetch(`${BODY_URL}/mind-state`, { signal: AbortSignal.timeout(800) });
 		const state = await res.json();
-		// 正在做的活继续推进；等拿主意时，空闲提醒让她选择下一件能做的事。
-		return state.jobBusy || state.workHeld || state.execActive || (state.tasksOpen && !state.tasksWaiting) ? 0 : Number(state.idleMs) || 0;
+		// 玩家明确暂停和正在进行的互动各自保留；临时交接后的暂停任务交给调度脑接续。
+		return state.jobBusy || state.playerPaused || state.interaction || state.execActive || (state.tasksOpen && !state.tasksWaiting) ? 0 : Number(state.idleMs) || 0;
 	} catch {
 		return Date.now() - lastMindAt;
 	}
