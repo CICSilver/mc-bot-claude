@@ -2,12 +2,18 @@
   "mcp": "../minecraft-mcp-server-xiaoke",
   "host": "mc.lemalin.icu",
   "port": 25565,
-  "username": "clawd",
-  "nick": "小克",
-  "earPort": 25599,
-  "bodyPort": 25598,
-  "home": ".",
-  "world": "正式世界",
+  "username": "clawd_test",
+  "nick": "小克test",
+  "earPort": 25612,
+  "bodyPort": 25613,
+  "home": "./test-home",
+  "world": "测试世界",
+  "datapackTriggers": false,
+  "env": {
+    "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
+    "XIAOKE_ALIASES": "admin=CICSilver",
+    "XIAOKE_COMPANIONS": "Moby,clawd"
+  },
   "layers": {
     "fast": {
       "model": "gemini-3.8-flash",
@@ -25,9 +31,5 @@
       "model": "gemini-4-argon",
       "effort": "medium"
     }
-  },
-  "env": {
-    "XIAOKE_ALIASES": "admin=CICSilver",
-    "XIAOKE_COMPANIONS": "Moby"
   }
 }
