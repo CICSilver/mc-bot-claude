@@ -10,6 +10,7 @@ function show(e) {
   const time = new Date(e.at).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
   const print = (label, text) => console.log('[' + time + '] [' + label + '] ' + text);
   if (e.type === 'input' && e.layer === 'fast' && e.text.includes('[环境]')) print('环境变化', e.text.split('　')[0]);
+  if (e.type === 'input' && e.layer === 'mind' && e.text.includes('[身体交接]')) print('身体交接', e.text.split('　')[0]);
   if (e.type === 'output') output.set(e.layer, (output.get(e.layer) ?? '') + e.text);
   if (e.type === 'turn_completed') {
     const text = output.get(e.layer)?.trim();
@@ -27,6 +28,7 @@ function show(e) {
     else if (e.tool === 'request-plan') print('调度 → 规划', a.brief);
     else if (e.tool === 'report-plan') print('规划 → 调度 #' + a.id, a.summary);
     else if (e.tool === 'stop-work') print('立即停工', a.action + ' ' + a.reason);
+    else if (e.tool === 'ride' || e.tool === 'get-off') print('身体动作 · ' + e.tool, e.result.content.map(c => c.text).join('；'));
     else if (e.tool === 'AppendJournal') print('日记', a.text);
   }
   if (e.type === 'fatal') print(labels[e.layer] + ' · 错误', e.message);
