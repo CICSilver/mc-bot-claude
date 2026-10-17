@@ -8,15 +8,21 @@ import { z } from 'zod';
 const inside = (root, target) => { const part = relative(root, target); return part === '' || (!part.startsWith('..') && !isAbsolute(part)); };
 export class Files {
   constructor(layer, home) {
-    if (!['fast', 'exec', 'mind'].includes(layer)) throw new Error('未知层');
+    if (!['fast', 'exec', 'mind', 'planner'].includes(layer)) throw new Error('未知层');
     this.layer = layer; this.home = realpathSync(home);
     const manual = existsSync(join(this.home, '手册')) ? '手册' : 'prompts/系统/手册';
     const reference = existsSync(join(this.home, '参考')) ? '参考' : 'prompts/小克/参考';
-    this.readable = ['memory', ...(layer !== 'fast' ? [manual] : []), ...(layer === 'mind' ? [reference] : [])].map(p => join(this.home, p));
+    this.readable = ['memory', ...(layer !== 'fast' ? [manual] : []), ...(layer === 'planner' ? [reference] : [])].map(p => join(this.home, p));
   }
   path(input, write = false) {
     if (typeof input !== 'string' || !input || input.includes('\0') || isAbsolute(input) || /^[A-Za-z]:|^\\\\/.test(input)) throw new Error('只接受项目内相对路径');
-    const target = resolve(this.home, input), roots = write ? [join(this.home, 'memory')] : this.readable;
+    let normalized = input.replace(/\\/g, '/');
+    if (!existsSync(join(this.home, '手册')) && (normalized === '手册' || normalized.startsWith('手册/'))) {
+      normalized = `prompts/系统/${normalized}`;
+    } else if (!existsSync(join(this.home, '参考')) && (normalized === '参考' || normalized.startsWith('参考/'))) {
+      normalized = `prompts/小克/${normalized}`;
+    }
+    const target = resolve(this.home, normalized), roots = write ? [join(this.home, 'memory')] : this.readable;
     if (write && this.layer !== 'mind') throw new Error('只有决策层可以修改记忆');
     if (!roots.some(root => inside(root, target))) throw new Error('路径越过允许范围');
     let cursor = target;
@@ -59,7 +65,7 @@ export function fileServer(layer, home) {
   const safe = fn => async args => { try { return fn(args); } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; } };
   server.registerTool('Read', { description: '读取本层允许的记忆、手册或参考。目录返回文件名，图片返回图像。路径相对小克 home。', inputSchema: { path: z.string() } }, safe(a => files.read(a.path)));
   if (layer === 'mind') {
-    server.registerTool('Edit', { description: '精确替换 memory/*.md 中唯一匹配的原文；日记禁止修改。', inputSchema: { path: z.string(), old_string: z.string(), new_string: z.string() } }, safe(a => files.edit(a.path, a.old_string, a.new_string)));
+    server.registerTool('Edit', { description: '精确替换 memory/*.md 中唯一匹配的原文；日记禁止修改。', inputSchema: { path: z.string(), old_string: z.string().optional(), new_string: z.string().optional(), oldText: z.string().optional(), newText: z.string().optional() } }, safe(a => files.edit(a.path, a.old_string ?? a.oldText, a.new_string ?? a.newText)));
     server.registerTool('AppendJournal', { description: '按 YYYY-MM-DD 日期追加当天日记，不能改以前的内容。', inputSchema: { date: z.string(), text: z.string() } }, safe(a => files.appendJournal(a.date, a.text)));
   }
   return server;

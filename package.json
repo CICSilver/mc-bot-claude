@@ -1,5 +1,5 @@
 {
-  "name": "mc-bot-codex",
+  "name": "mc-bot-agy",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,7 +8,6 @@
   },
   "scripts": {
     "start": "node scripts/start.mjs",
-    "login": "node scripts/codex-login.mjs",
     "check": "node scripts/start.mjs --check",
     "test": "node --test scripts/*.test.mjs",
     "smoke": "node scripts/smoke.mjs",

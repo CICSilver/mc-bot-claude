@@ -6,7 +6,7 @@
 // - ws://127.0.0.1:25599/mind  决策脑：执行脑的汇报、[记下]、提醒、空闲、下线、心情变了……拿主意。后面附上这段时间快速反应层那边发生的事
 // 耳朵也是她跟服务器控制台之间的一根线：身体想冒气泡、喵一声、冒爱心时 POST /effect，耳朵换成调用数据包 xiaoke_fx 的命令（world-fx.mjs）
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createInterface } from "node:readline";
@@ -73,20 +73,21 @@ const RE_ADV = new RegExp(`^${NAME} has (made the advancement|completed the chal
 const RE_DEATH = new RegExp(`^${NAME} (was |drowned|fell |hit the ground|burned|went up in flames|went off|tried to swim|blew up|starved|suffocated|died|froze|walked into|experienced kinetic|withered|discovered the floor|didn't want|left the confines)`);
 
 // 哪类事件叫醒哪一层。快速反应层管嘴巴和社交，执行脑管把活做成，决策脑管打算、取舍和记忆
-const FAST = "fast", EXEC = "exec", MIND = "mind";
-const NAMES = { [FAST]: "快速反应层", [EXEC]: "执行脑", [MIND]: "决策脑" };
+const FAST = "fast", EXEC = "exec", MIND = "mind", PLANNER = "planner";
+const NAMES = { [FAST]: "快速反应层", [EXEC]: "执行脑", [MIND]: "调度脑", [PLANNER]: "规划脑" };
 const ROUTES = {
 	聊天: [FAST], 进服: [FAST], 离开: [FAST], 成就: [FAST], 死亡: [FAST], 礼物: [FAST], 注视: [FAST],
 	// 召唤会打断手上的活；危险时身体已经本能地跑开了，嘴巴冒一句，执行脑看看活怎么办
 	召唤: [FAST, EXEC], 危险: [FAST, EXEC], 断线: [FAST, EXEC, MIND],
 	// 派活、长活结束、下雨雨停：执行脑处理；执行脑的汇报：决策脑拿主意
 	任务: [EXEC], 汇报: [MIND],
+	规划: [PLANNER], 规划完成: [MIND],
 	// 身体看到的：决策脑在深想（快的那一面可以冒句自言自语）、身边有人却好一会儿没人说话（找个话题聊）
 	琢磨: [FAST], 闲聊: [FAST],
 	// 决策脑想好了要说的话：聊天框里只有快速反应层一张嘴，托它说出口
 	转告: [FAST],
 	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
-	互动: [FAST], 看见: [FAST], 游戏: [FAST],
+	互动: [FAST], 看见: [FAST], 环境: [FAST], 游戏: [FAST],
 	// 心情变了一档（身体算的，只有说法和原因）：嘴巴冒一句或做个表情，决策脑想想要不要改打算
 	心情: [FAST, MIND],
 	进展: [EXEC], 天气: [EXEC], 提醒: [MIND], 空闲: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
@@ -94,8 +95,9 @@ const ROUTES = {
 
 const online = new Set();      // 在线的真人访客
 const companionsOnline = new Set();
-const clients = { [FAST]: new Set(), [EXEC]: new Set(), [MIND]: new Set() };
-const pending = { [FAST]: [], [EXEC]: [], [MIND]: [] };   // 那一层没在听时攒下的事件，等它连上再一起给
+const clients = { [FAST]: new Set(), [EXEC]: new Set(), [MIND]: new Set(), [PLANNER]: new Set() };
+const pending = { [FAST]: [], [EXEC]: [], [MIND]: [], [PLANNER]: [] };
+const interruptAcks = new Map();
 // 只叫醒了快速反应层的事（还有小克自己在聊天里说的话、旁听到的话），攒着，下次叫醒决策脑时一起给它看。每条是 { text, overheard }
 const digest = [];
 // 旁边的人在聊、不是对她说的话：不叫醒谁，下次叫醒快速反应层时附在后面（3 分钟内的，最多 6 句），给过一次就清掉
@@ -105,7 +107,7 @@ let lastAddressed = null;   // { who, at }
 let lastSaidAt = 0;
 let lastMindAt = Date.now();
 // 给快速反应层、执行脑的事件要先问身体要〔现在〕，各排一队免得顺序乱
-const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve() };
+const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve(), [MIND]: Promise.resolve() };
 let idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
 let journal = null;   // 读服务器日志的 ssh 进程，耳朵退出时一起关掉
 let busyUntil = 0;    // 小克在做后台长活（砍树、钓鱼、探险……）时不发 [空闲]，做完会有 [进展] 叫醒她
@@ -136,6 +138,22 @@ function deliver(layer, text) {
 		if (pending[layer].length > 50) pending[layer].shift();
 	}
 	for (const socket of clients[layer]) socket.write(frame(text));
+}
+
+async function interrupt(layer, text, resume = true) {
+  pending[layer].length = 0;
+  if (!clients[layer].size) {
+    if (resume) pending[layer].push(text);
+    return;
+  }
+  const id = randomUUID();
+  const ack = new Promise(resolve => {
+    const timer = setTimeout(() => { interruptAcks.delete(id); resolve(); }, 2000);
+    interruptAcks.set(id, () => { clearTimeout(timer); interruptAcks.delete(id); resolve(); });
+  });
+  for (const socket of clients[layer]) socket.write(frame(JSON.stringify({ type: 'interrupt', id, text, resume })));
+  console.log(`${ts()} [立即停工] ${layer}：${text}`);
+  await ack;
 }
 
 // ---- 给决策脑看的“这段时间嘴巴那边” ----
@@ -227,7 +245,7 @@ function visitorChat(who, text) {
 }
 
 // 身体提醒快速反应层开口的事件：没人在听就算了，过时的不攒着，也不算进决策脑要看的“这段时间”
-const NUDGES = new Set(["琢磨", "闲聊"]);
+const NUDGES = new Set(["琢磨", "闲聊", "环境"]);
 // 决策脑自己托出去的话，不用再给它看一遍；快速反应层真说出口的那句会以“你: ……”出现在“这段时间”里
 const FROM_MIND = new Set(["转告"]);
 // 只留在快速反应层的事：有人盯着她看，嘴巴瞄一眼、冒一句就完了，不给决策脑看（10-09 用户定的）
@@ -237,9 +255,14 @@ function emit(kind, body, to = ROUTES[kind]) {
 	if (NUDGES.has(kind) && !clients[FAST].size) return;
 	const line = `${ts()} [${kind}] ${body}`;
 	console.log(`${line}  → ${to.join("+")}`);
-	if (to.includes(MIND)) deliver(MIND, line + takeDigest());
+	if (to.includes(MIND)) {
+		const input = line + takeDigest();
+		if (body.startsWith('[控制:')) void interrupt(MIND, input);
+		else queues[MIND] = queues[MIND].then(() => withSnapshot(input, MIND)).then(text => deliver(MIND, text));
+	}
+	if (to.includes(PLANNER)) deliver(PLANNER, line);
 	// 只叫醒了快速反应层的事，攒着给决策脑看；执行脑那边的事它从 [汇报] 里知道
-	else if (to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind) && !FAST_ONLY.has(kind)) remember(line.slice(6));   // 去掉日期，只留时:分
+	if (!to.includes(MIND) && to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind) && !FAST_ONLY.has(kind)) remember(line.slice(6));
 	for (const layer of [FAST, EXEC]) {
 		if (!to.includes(layer)) continue;
 		queues[layer] = queues[layer].then(() => withSnapshot(line, layer)).then(text => deliver(layer, text)).catch(e => console.log(`${ts()} 发给${NAMES[layer]}失败：${e}`));
@@ -251,15 +274,15 @@ async function mindIdleMs() {
 	try {
 		const res = await fetch(`${BODY_URL}/mind-state`, { signal: AbortSignal.timeout(800) });
 		const state = await res.json();
-		// 执行脑手上还有活（或者在干后台长活），决策脑就不算闲着
-		return state.jobBusy || state.tasksOpen ? 0 : Number(state.idleMs) || 0;
+		// 正在做的活继续推进；等拿主意时，空闲提醒让她选择下一件能做的事。
+		return state.jobBusy || state.workHeld || state.execActive || (state.tasksOpen && !state.tasksWaiting) ? 0 : Number(state.idleMs) || 0;
 	} catch {
 		return Date.now() - lastMindAt;
 	}
 }
 
 every(async () => {
-	if (!online.size || !clients[MIND].size || Date.now() < busyUntil) return;
+	if (!clients[MIND].size || Date.now() < busyUntil) return;
 	if (await mindIdleMs() < idleWait) return;
 	idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
 	emit("空闲", `你有一会儿没动静了。接着过你自己的日子：推进手上的打算，或者看看周围冒个小点子；在等雨停、等天亮也找点小事做。${onlineText()}`);
@@ -372,14 +395,20 @@ function handleFrame(socket, buf) {
 	const data = Buffer.from(buf.subarray(off + 4, off + 4 + len)).map((b, i) => b ^ mask[i % 4]);
 	if (op === 0x8) { socket.end(Buffer.from([0x88, 0x00])); for (const set of Object.values(clients)) set.delete(socket); }
 	else if (op === 0x9 && data.length < 126) socket.write(Buffer.concat([Buffer.from([0x8a, data.length]), data]));
+	else if (op === 0x1) {
+		const message = JSON.parse(data.toString('utf8'));
+		if (message.type === 'interrupt_done') interruptAcks.get(message.id)?.();
+	}
 }
 
 // 小克的 MCP（身体）发来的消息：后台长活结束了（进展）、她给自己定的提醒到了（提醒）、有人扔东西给她（礼物）、下雨雨停（天气）、
 // 有人一直盯着她（注视）、怪物太近本能跑开（危险）、快速反应层记下来交给决策脑的事（记下）、决策脑托快速反应层说的话（转告）、
 // 决策脑派给执行脑的活（任务）、执行脑回报决策脑（汇报）、心情变了一档（心情）、开始 / 结束忙
-function handleMcp(path, body) {
+async function handleMcp(path, body) {
 	const data = JSON.parse(body || "{}");
-	if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "任务", "汇报", "琢磨", "闲聊", "互动", "看见", "游戏", "心情"].includes(data.kind) && typeof data.text === "string") {
+	if (path === '/interrupt') {
+		await interrupt(data.layer, data.text, data.resume);
+	} else if (path === "/event" && ["进展", "提醒", "礼物", "天气", "注视", "危险", "记下", "转告", "任务", "汇报", "琢磨", "闲聊", "互动", "看见", "环境", "游戏", "心情", "规划", "规划完成"].includes(data.kind) && typeof data.text === "string") {
 		if (data.kind === "进展") busyUntil = 0;
 		emit(data.kind, data.text.slice(0, 1000));
 	} else if (path === "/busy") {
@@ -405,7 +434,7 @@ const http = createServer((req, res) => {
 		});
 		return;
 	}
-	if (req.method === "POST" && (req.url === "/event" || req.url === "/busy")) {
+	if (req.method === "POST" && ["/event", "/busy", "/interrupt"].includes(req.url)) {
 		// 只收本机身体发来的 JSON：网页能悄悄发 text/plain 表单，也能借 DNS 重绑定换个 Host 摸过来，往小克脑子里塞假事件
 		if (!LOCAL_HOSTS.has(req.headers.host ?? "") || !(req.headers["content-type"] ?? "").startsWith("application/json")) {
 			res.writeHead(403); res.end("forbidden\n"); return;
@@ -413,8 +442,8 @@ const http = createServer((req, res) => {
 		let body = "";
 		req.setEncoding("utf8");
 		req.on("data", chunk => { if (body.length < 8192) body += chunk; });
-		req.on("end", () => {
-			try { handleMcp(req.url, body); res.end("ok\n"); }
+		req.on("end", async () => {
+			try { await handleMcp(req.url, body); res.end("ok\n"); }
 			catch { res.writeHead(400); res.end("bad request\n"); }
 		});
 		return;
@@ -425,7 +454,7 @@ http.on("upgrade", (req, socket) => {
 	const key = req.headers["sec-websocket-key"];
 	if (!key) return socket.destroy();
 	const path = req.url ?? "/";
-	const layer = path.startsWith("/mind") ? MIND : path.startsWith("/exec") ? EXEC : FAST;
+	const layer = path.startsWith("/planner") ? PLANNER : path.startsWith("/mind") ? MIND : path.startsWith("/exec") ? EXEC : FAST;
 	const accept = createHash("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
 	socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
 	socket.setNoDelay(true);
@@ -434,7 +463,7 @@ http.on("upgrade", (req, socket) => {
 	socket.on("error", () => clients[layer].delete(socket));
 	clients[layer].add(socket);
 	console.log(`${ts()} ${NAMES[layer]}开始听了`);
-	socket.write(frame(`${ts()} [开始监听] ${onlineText()}`));
+	if (layer !== PLANNER) socket.write(frame(`${ts()} [开始监听] ${onlineText()}`));
 	const queued = pending[layer].splice(0);
 	for (const line of queued) socket.write(frame(line));
 });

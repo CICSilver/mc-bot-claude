@@ -14,17 +14,37 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MANUAL_DIR = "prompts/系统/手册";
 export const WORLD_DIR = "prompts/世界";
-const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/决策.md" };
+const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执行.md", mind: "prompts/系统/调度.md", planner: "prompts/系统/规划.md" };
 export const LAYER_NAMES = Object.keys(LAYER_FILES);
 // 哪一层带人格、生活、说话习惯，哪一层有手册目录、参考的概要（一共几份、有哪些标签）
-const WITH_PERSONA = new Set(["fast", "mind"]);
-const WITH_MANUALS = new Set(["exec", "mind"]);
-const WITH_REFERENCES = new Set(["mind"]);
+const WITH_PERSONA = new Set(["fast", "mind", "planner"]);
+const WITH_MANUALS = new Set(["exec", "planner"]);
+const WITH_REFERENCES = new Set(["planner"]);
 const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n");
 // <!-- --> 里是写给维护的人看的说明，不给小克
 const stripComments = text => text.replace(/<!--[\s\S]*?-->\n?/g, "").trim();
 
-export function buildStartupMemory(home) {
+export function buildStartupMemory(home, layer = 'fast') {
+	if (layer === 'mind') {
+		const memDir = join(home, 'memory');
+		const baseFiles = ['self.md', 'people.md', 'world.md', 'goals.md']
+			.filter(name => existsSync(join(memDir, name)))
+			.map(name => `### memory/${name}\n${readFileSync(join(memDir, name), 'utf8')}`);
+		const journalDir = join(memDir, 'journal');
+		const journals = existsSync(journalDir)
+			? readdirSync(journalDir)
+				.filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+				.sort()
+				.slice(-2)
+				.map(name => `### memory/journal/${name}\n${readFileSync(join(journalDir, name), 'utf8')}`)
+			: [];
+		return [
+			"## 醒来时已自动预读的记忆（无需再用 Read 重复读取以下文件）",
+			"下面是启动程序从你的 memory/ 目录读取的最新内容，醒来第 1 步已经为你读好，请直接从检查状态（get-status、get-tasks）、写醒来日记（AppendJournal）和安排打算开始：",
+			...baseFiles,
+			...journals,
+		].join("\n\n");
+	}
 	return [
 		"## 醒来时已读到的记忆",
 		"下面是启动程序从你的记忆里读取的当前内容，无需再重复读取。跟人打招呼、接话前先按人物记忆确认已有称呼和约定；已有昵称就继续用。历史经历里的旧好感度不是当前分数，需要确认分数时用 get-relationships。",

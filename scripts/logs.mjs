@@ -2,8 +2,8 @@
 // 一局一个文件夹 logs/runs/<日期>_<时分>_<main|test>_<登录名>/：
 //   ear.log、body.log              这一局耳朵和身体写的那一段（logs/ 里的是一直往后接着写的）
 //   analysis.jsonl                 这一局心情的分析日志（每件事前后的数、跨档、心结）。logs/analysis.jsonl 每局开始时清掉，只装这一局的
-//   fast.jsonl、exec.jsonl、mind.jsonl  三层控制器直接记录的 Codex 会话
-//   prompt-fast.md 这些             这一局三层用的设定
+//   fast.jsonl、exec.jsonl、mind.jsonl  四层控制器直接记录的 Agy 会话
+//   prompt-fast.md 这些             这一局四层用的设定
 //   run.json                       什么时候开始和结束、哪台电脑、哪个服、模型和思考强度、两个仓库在哪个提交
 // 用法：
 //   node scripts/logs.mjs pull     把服务器上的拉到 logs/runs/（看日志、跑 measure.mjs / cost.mjs）
@@ -18,53 +18,46 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LOGS = join(ROOT, "logs");
 const RUNS = join(LOGS, "runs");
-const CURRENT = join(LOGS, "run.json");   // 正在跑的这一局：醒来时写下，收尾时搬进它的文件夹
+const CURRENT = join(LOGS, "run.json");
 const KEEP_MS = 2 * 24 * 3600 * 1000;
-// 跟耳朵连同一台服务器（scripts/ear-server.mjs）
 const SERVER = process.env.MC_SERVER ?? "root@121.4.126.91";
 const SSH = process.env.SSH_BIN ?? "ssh";
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"];
-const REMOTE = "~/xiaoke-codex-logs";
-// Windows 自带的 tar（Git 里那个 tar 不认 Windows 路径）
+const REMOTE = "~/xiaoke-agy-logs";
 const TAR = process.platform === "win32" && existsSync(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"))
 	? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
-const LAYERS = ["fast", "exec", "mind"];
-// 身体写的心情分析日志（start.mjs 用 XIAOKE_ANALYSIS 告诉身体写到这里）
+const LAYERS = ["fast", "exec", "mind", "planner"];
 const ANALYSIS = join(LOGS, "analysis.jsonl");
 
 const size = file => { try { return statSync(file).size; } catch { return 0; } };
 const pad = n => String(n).padStart(2, "0");
 const stamp = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-const commit = dir => { try { return execFileSync("git", ["-C", dir, "rev-parse", "--short", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(); } catch { return ""; } };
-const branch = dir => { try { return execFileSync("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", windowsHide: true }).trim(); } catch { return ""; } };
+const commit = dir => { try { return execFileSync("git", ["-C", dir, "rev-parse", "--short", "HEAD"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; } };
+const branch = dir => { try { return execFileSync("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; } };
 
-// 醒来时：记下耳朵、身体的日志现在写到哪了。上一局要是没收好尾（直接点 X 关的窗口），先替它收尾
 export function beginRun({ side, login, world, layers, mcp }) {
 	if (existsSync(CURRENT)) {
 		try { finishRun(); } catch (e) { console.warn(`上一局的日志没能收好：${e.message}`); }
 	}
-	// 心情的分析日志不像 body.log 那样一直往后接：上一局的上面已经收进它的文件夹了，这里清掉，这一局从空的开始。
-	// 清不掉（比如被占着）也没关系，下面记下从哪开始，收尾时只拿这一局的那段
-	try { rmSync(ANALYSIS, { force: true }); } catch { /* 清不掉就按位置截 */ }
+	try { rmSync(ANALYSIS, { force: true }); } catch {}
 	const started = new Date();
 	const run = {
 		id: `${stamp(started)}_${side || "unknown"}_${login}`,
 		startedAt: started.toISOString(),
-		host: hostname(), provider: "codex",
+		host: hostname(), provider: "agy",
 		side, login, world, layers,
 		commits: { bot: `${branch(ROOT)} ${commit(ROOT)}`, mcp: mcp ? `${branch(mcp)} ${commit(mcp)}` : "" },
 		earStart: size(join(LOGS, "ear.log")),
 		bodyStart: size(join(LOGS, "body.log")),
 		analysisStart: size(ANALYSIS),
 		layerStart: Object.fromEntries(LAYERS.map(layer => [layer, size(join(LOGS, `${layer}.jsonl`))])),
-		diagnosticStart: Object.fromEntries(LAYERS.map(layer => [layer, size(join(LOGS, `codex-${layer}.log`))])),
+		diagnosticStart: Object.fromEntries(LAYERS.map(layer => [layer, size(join(LOGS, `agy-${layer}.log`))])),
 	};
 	mkdirSync(LOGS, { recursive: true });
 	writeFileSync(CURRENT, JSON.stringify(run, null, 2));
 	return run;
 }
 
-// 从 start 开始到文件末尾那一段
 function copyTail(from, to, start) {
 	const end = size(from);
 	if (end <= start) return writeFileSync(to, "");
@@ -74,7 +67,6 @@ function copyTail(from, to, start) {
 	writeFileSync(to, buf);
 }
 
-// 收尾：这一局的东西都搬进 logs/runs/<id>/
 export function finishRun() {
 	if (!existsSync(CURRENT)) return null;
 	const run = JSON.parse(readFileSync(CURRENT, "utf8"));
@@ -82,16 +74,15 @@ export function finishRun() {
 	mkdirSync(dir, { recursive: true });
 	copyTail(join(LOGS, "ear.log"), join(dir, "ear.log"), run.earStart ?? 0);
 	copyTail(join(LOGS, "body.log"), join(dir, "body.log"), run.bodyStart ?? 0);
-	// 心情关着时身体不写分析日志，就不放空文件
 	if (existsSync(ANALYSIS)) copyTail(ANALYSIS, join(dir, "analysis.jsonl"), run.analysisStart ?? 0);
 	let sessions = {};
 	const missing = [];
 	for (const layer of LAYERS) {
 		const file = join(LOGS, `${layer}.jsonl`);
 		copyTail(file, join(dir, `${layer}.jsonl`), run.layerStart?.[layer] ?? 0);
-		copyTail(join(LOGS, `codex-${layer}.log`), join(dir, `codex-${layer}.log`), run.diagnosticStart?.[layer] ?? 0);
+		copyTail(join(LOGS, `agy-${layer}.log`), join(dir, `agy-${layer}.log`), run.diagnosticStart?.[layer] ?? 0);
 		const entries = readFileSync(join(dir, `${layer}.jsonl`), "utf8").split("\n").filter(Boolean).map(line => JSON.parse(line));
-		const session = entries.find(e => e.type === "session");
+		const session = entries.findLast(e => (e.type === "session_ready" || e.type === "session") && e.threadId);
 		if (session) sessions[layer] = session.threadId;
 		else missing.push(layer);
 		const prompt = join(LOGS, `prompt-${layer}.md`);
@@ -114,7 +105,6 @@ function run(cmd, args, { cwd, input, output } = {}) {
 	});
 }
 
-// 一端的 tar 接到另一端的 tar，中间是 ssh
 async function pipe(fromCmd, fromArgs, fromCwd, toCmd, toArgs, toCwd) {
 	let to;
 	const receiving = run(toCmd, toArgs, { cwd: toCwd, input: p => { to = p; } });
@@ -128,12 +118,10 @@ const ended = dir => {
 };
 const localRuns = () => (existsSync(RUNS) ? readdirSync(RUNS).filter(n => existsSync(join(RUNS, n, "run.json"))) : []);
 
-// 两天前的本地归档清掉，logs/ 里的持续记录保留。
 function pruneLocal() {
 	for (const name of localRuns()) if (Date.now() - ended(name) > KEEP_MS) rmSync(join(RUNS, name), { recursive: true, force: true });
 }
 
-// 把还没传的传上去，服务器上两天前的删掉
 export async function pushRuns() {
 	pruneLocal();
 	const pending = localRuns().filter(n => !existsSync(join(RUNS, n, ".uploaded")));

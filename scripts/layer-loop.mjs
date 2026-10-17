@@ -1,74 +1,173 @@
 import { EventEmitter } from 'node:events';
+import { normalizeMcpTool } from './agy-config.mjs';
 
 export class LayerLoop extends EventEmitter {
   constructor(client, threadId, options, log = () => {}) {
-    super(); this.client = client; this.threadId = threadId; this.options = options; this.log = log;
-    this.queue = []; this.active = null; this.draining = false; this.stopped = false; this.completed = new Set();
-    this.onNotification = message => this.notification(message);
-    client.on('notification', this.onNotification);
+    super();
+    this.client = client;
+    this.threadId = threadId ?? client.conversationId ?? null;
+    this.options = options;
+    this.log = log;
+    this.queue = [];
+    this.active = null;
+    this.draining = false;
+    this.stopped = false;
+    this.turnSeq = 0;
+    this.interruption = '';
+    this.interrupting = null;
+
+    this.onInit = msg => this.handleInit(msg);
+    this.onStepUpdate = step => this.handleStepUpdate(step);
+    this.onResult = res => this.handleResult(res);
+
+    client.on('init', this.onInit);
+    client.on('step_update', this.onStepUpdate);
+    client.on('result', this.onResult);
   }
+
   enqueue(text) {
     if (this.stopped) return;
-    this.log({ type: 'input', text }); this.queue.push(text); void this.pump();
+    this.log({ type: 'input', text });
+    this.queue.push(text);
+    if (this.active) {
+      this.log({ type: 'queued', turnId: this.active });
+      return;
+    }
+    void this.pump();
   }
+
   async pump() {
-    if (this.draining || this.stopped || !this.queue.length) return;
+    if (this.draining || this.stopped || this.active || this.interrupting || !this.queue.length) return;
     this.draining = true;
     try {
-      while (this.queue.length && !this.stopped) {
-        const text = this.queue.splice(0).join('\n');
-        const input = [{ type: 'text', text }];
-        if (this.active) {
-          const expectedTurnId = this.active;
-          try {
-            await this.client.request('turn/steer', { threadId: this.threadId, expectedTurnId, input });
-            this.log({ type: 'steered', turnId: expectedTurnId });
-          } catch (error) {
-            // 只有确认旧回合结束的冲突才可再次投递；网络错误不能冒险重放。
-            if (this.completed.has(expectedTurnId)) { this.queue.unshift(text); this.active = null; }
-            else throw error;
-          }
-        } else {
-          const result = await this.client.request('turn/start', {
-            threadId: this.threadId, input, model: this.options.model, effort: this.options.effort,
-            approvalPolicy: 'never', serviceTierForTurn: 'default',
-            collaborationMode: { mode: 'default', settings: { model: this.options.model, reasoning_effort: this.options.effort, developer_instructions: '' } },
-          });
-          if (!result.turn?.id) throw new Error('turn/start 未返回回合 ID');
-          this.active = this.completed.has(result.turn.id) ? null : result.turn.id;
-        }
+      while (this.queue.length && !this.stopped && !this.active) {
+        const text = [this.interruption, ...this.queue.splice(0)].filter(Boolean).join('\n');
+        this.interruption = '';
+        const turnId = `turn-${++this.turnSeq}`;
+        this.active = turnId;
+        this.log({ type: 'turn_started', turnId });
+        this.emit('activity', 'UserPromptSubmit', '');
+        await this.client.sendUserMessage(text);
       }
-    } catch (error) { this.stopped = true; this.emit('fatal', error); }
-    finally { this.draining = false; }
+    } catch (error) {
+      this.active = null;
+      this.stopped = true;
+      this.emit('fatal', error);
+    } finally {
+      this.draining = false;
+    }
   }
-  notification({ method, params = {} }) {
-    if (params.threadId && params.threadId !== this.threadId) return;
-    if (method === 'turn/started') {
-      this.active = params.turn.id; this.log({ type: 'turn_started', turnId: this.active }); this.emit('activity', 'UserPromptSubmit', '');
-    } else if (method === 'turn/completed') {
-      const turn = params.turn; this.completed.add(turn.id);
-      if (this.completed.size > 100) this.completed.delete(this.completed.values().next().value);
-      if (this.active === turn.id) this.active = null;
-      this.log({ type: 'turn_completed', turnId: turn.id, status: turn.status, error: turn.error ?? null });
-      this.emit('activity', turn.status === 'failed' ? 'StopFailure' : 'Stop', '');
-      if (turn.status === 'failed') { this.stopped = true; this.emit('fatal', new Error(turn.error?.message ?? '模型回合失败')); }
-      else void this.pump();
-    } else if (method === 'item/agentMessage/delta') {
-      this.log({ type: 'output', turnId: params.turnId, text: params.delta }); this.emit('output', params.delta);
-    } else if (method === 'thread/tokenUsage/updated') this.log({ type: 'usage', tokenUsage: params.tokenUsage });
-    else if (method === 'account/rateLimits/updated') this.log({ type: 'rate_limits', rateLimits: params });
-    else if (method === 'item/started' || method === 'item/completed') {
-      const item = params.item ?? {};
-      if (item.type === 'mcpToolCall') {
-        const tool = item.server === 'files' ? item.tool : `mcp__${item.server}__${item.tool}`;
-        this.emit('activity', method.endsWith('started') ? 'PreToolUse' : 'PostToolUse', tool);
-        this.log({ type: method.endsWith('started') ? 'tool_started' : 'tool_completed', turnId: params.turnId, server: item.server, tool: item.tool, arguments: item.arguments, result: item.result, error: item.error });
+
+  async interrupt(text, resume = true) {
+    if (this.stopped) return;
+    if (this.interrupting) await this.interrupting;
+    const turnId = this.active;
+    this.active = null;
+    this.queue.length = 0;
+    this.interruption = `（最新控制要求）${text}`;
+    this.log({ type: 'turn_interrupted', turnId, text, resume });
+    this.emit('activity', 'Stop', '');
+    if (turnId) {
+      this.interrupting = this.client.interrupt();
+      try { await this.interrupting; }
+      finally { this.interrupting = null; }
+    }
+    if (resume) this.enqueue('请按最新控制要求处理。');
+    else void this.pump();
+  }
+
+  updateSessionId(id) {
+    if (!id || id === this.threadId) return;
+    this.threadId = id;
+    this.emit('session', id);
+  }
+
+  handleInit(msg = {}) {
+    this.updateSessionId(msg.conversation_id);
+  }
+
+  handleStepUpdate(step = {}) {
+    this.updateSessionId(step.conversation_id);
+    if (step.step_type === 'agent_response' && step.text_delta) {
+      this.log({ type: 'output', turnId: this.active, text: step.text_delta });
+      this.emit('output', step.text_delta);
+      return;
+    }
+    if (step.step_type === 'tool') {
+      const info = normalizeMcpTool(step);
+      // 忽略 Agy 内部自动读取 ~/.gemini/antigravity-cli/(mcp|brain)/... 的 schema 预检或长输出缓存步骤
+      if (!info.isMcp && info.tool === 'view_file') {
+        const targetPath = String(info.arguments?.AbsolutePath ?? '');
+        if (/antigravity-cli[\\/](mcp|brain)[\\/]/i.test(targetPath)) return;
+        info.server = 'files';
+        info.tool = 'Read';
+        info.arguments = { path: targetPath };
+        info.hookTool = 'Read';
+      }
+      const isStart = step.state === 'ACTIVE';
+      const isDone = step.state === 'DONE';
+      if (!isStart && !isDone) return;
+
+      this.emit('activity', isStart ? 'PreToolUse' : 'PostToolUse', info.hookTool);
+      if (info.isMcp || info.server === 'files') {
+        this.log({
+          type: isStart ? 'tool_started' : 'tool_completed',
+          turnId: this.active,
+          server: info.server,
+          tool: info.tool,
+          arguments: info.arguments,
+          ...(isDone ? { result: info.result, error: info.error } : {}),
+        });
+        if (isStart) {
+          this.emit('tool', info);
+        }
       }
     }
   }
+
+  handleResult(res = {}) {
+    this.updateSessionId(res.conversation_id);
+    if (res.usage) {
+      const u = res.usage;
+      const tokenUsage = {
+        total: {
+          inputTokens: u.input_tokens ?? 0,
+          cachedInputTokens: u.cache_read_tokens ?? 0,
+          outputTokens: u.output_tokens ?? 0,
+          reasoningOutputTokens: u.thinking_tokens ?? 0,
+          totalTokens: u.total_tokens ?? 0,
+        },
+      };
+      this.log({ type: 'usage', tokenUsage });
+    }
+
+    const turnId = this.active ?? `turn-${++this.turnSeq}`;
+    this.active = null;
+    const failed = res.status !== 'SUCCESS';
+    const errorObj = failed ? { message: res.error || `模型回合失败 (${res.status})` } : null;
+    this.log({
+      type: 'turn_completed',
+      turnId,
+      status: failed ? 'failed' : 'completed',
+      error: errorObj,
+    });
+    this.emit('activity', failed ? 'StopFailure' : 'Stop', '');
+
+    if (failed) {
+      this.stopped = true;
+      this.emit('fatal', new Error(errorObj.message));
+    } else {
+      void this.pump();
+    }
+  }
+
   async stop() {
-    this.stopped = true; this.queue.length = 0;
-    if (this.active) await this.client.request('turn/interrupt', { threadId: this.threadId, turnId: this.active }, 5000).catch(() => {});
-    this.emit('activity', 'Stop', ''); this.client.off('notification', this.onNotification);
+    this.stopped = true;
+    this.queue.length = 0;
+    this.active = null;
+    this.emit('activity', 'Stop', '');
+    this.client.off('init', this.onInit);
+    this.client.off('step_update', this.onStepUpdate);
+    this.client.off('result', this.onResult);
   }
 }

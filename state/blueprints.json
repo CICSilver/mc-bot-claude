@@ -1,0 +1,500 @@
+[
+ {
+  "name": "海边小屋-地基",
+  "x": -3,
+  "y": 65,
+  "z": 34,
+  "palette": {
+   "C": "cobblestone"
+  },
+  "layers": [
+   [
+    "CCCCCCCCC",
+    "CCCCCCCCC",
+    "CCCCCCCCC",
+    "CCCCCCCCC",
+    "CCCCCCCCC",
+    "CCCCCCCCC",
+    "CCCCCCCCC"
+   ]
+  ],
+  "note": "海边小屋的地基：9 格宽（东西 x=-3..5）、7 格深（南北 z=34..40），一层圆石铺在 y=65，把草皮换成圆石，同时也是屋里的地板。门以后开在北边朝海",
+  "savedAt": 1791463346731,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-木桩和地板",
+  "x": -4,
+  "y": 58,
+  "z": 17,
+  "palette": {
+   "C": "cobblestone",
+   "L": "acacia_log",
+   "P": "acacia_planks",
+   "K": "acacia_log",
+   "O": "oak_planks"
+  },
+  "layers": [
+   [
+    "         ",
+    "         ",
+    "         ",
+    "C       C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "         ",
+    "         ",
+    "         ",
+    "C   C   C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "         ",
+    "         ",
+    "         ",
+    "C   C   C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "        C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "         ",
+    "         ",
+    "         ",
+    "C   C   C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "C   C   C",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "         ",
+    "         ",
+    "         ",
+    "L   L   L",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "L   L   L",
+    "         ",
+    "   K K   ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "         ",
+    "         ",
+    "         ",
+    "L   L   L",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "         ",
+    "L   L   L",
+    "         ",
+    "   K K   ",
+    "         ",
+    "         ",
+    "         "
+   ],
+   [
+    "  PPPPP  ",
+    "  PPPPP  ",
+    "  PPPPP  ",
+    "LPPPPPPPL",
+    "PPPPPPPPP",
+    "PPPPPPPPP",
+    "PPPPPPPPP",
+    "PPPPPPPPP",
+    "PPPPPPPPP",
+    "LPPPPPPPL",
+    "   OOO   ",
+    "   OOO   ",
+    "   OOO   ",
+    "   OOO   ",
+    "   OOO   "
+   ]
+  ],
+  "note": "水上小屋第一段：海里打桩（水下圆石，露出水面的 y=62~63 用金合欢原木），上面铺 y=64 的金合欢木地板。房子 x=-4..4, z=20..26（9x7），北边伸出 5x3 的钓鱼平台 (z=17..19)，南边 3 格宽的橡木栈道 (x=-1..1, z=27..31) 连到沙滩和院子，栈道下两根桩也用金合欢原木（橡木原木用完了）。四个屋角的原木以后一直往上当柱子",
+  "savedAt": 1791467546862,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-地板和东边栈道",
+  "x": -4,
+  "y": 64,
+  "z": 17,
+  "palette": {
+   "O": "oak_planks",
+   "P": "acacia_planks"
+  },
+  "layers": [
+   [
+    "  OOOOO    ",
+    "  OOOOO    ",
+    "  OO OO    ",
+    "PPP   PPPPP",
+    "PPPP PPPPPP",
+    "PPPPPPPPPPP",
+    "PPPPPPPPPPP",
+    "PPPPPPPPPPP",
+    " PPPPPPPPPP",
+    " PPP PPP PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "         PP"
+   ]
+  ],
+  "note": "水上小屋的地板，全部铺在 y=64，不用下水：从已经打好的桩子和木板往外一块接一块铺。房子 x=-4..4, z=20..26 金合欢木板；北边钓鱼平台 x=-2..2, z=17..19 橡木板；房子东边 2 格宽金合欢木栈道 x=5..6，从 z=20 一直到 z=34 接上院子草坡，绕开 CICSilver 的麦田",
+  "savedAt": 1791468641649,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-补地板和短栈道",
+  "x": -4,
+  "y": 64,
+  "z": 17,
+  "palette": {
+   "O": "oak_planks",
+   "P": "acacia_planks"
+  },
+  "layers": [
+   [
+    "  O   O    ",
+    "           ",
+    "           ",
+    "           ",
+    "P       P  ",
+    " P     PP  ",
+    "  P   PPP  ",
+    "      PPP  ",
+    "       PPPP",
+    "         PP",
+    "         PP",
+    "   . .   PP",
+    "         PP",
+    "         PP",
+    "         PP",
+    "          P",
+    "           ",
+    "           "
+   ]
+  ],
+  "note": "把水上小屋地板剩下的洞补上（y=64）：房子里 14 个洞用金合欢木板，钓鱼平台两个角用橡木板；东墙门口 (5..6,64,25) 一个小平台，接着短栈道 x=5..6, z=25..31 往南接到岸上 (z=32)。顺便挖掉之前飘在 CICSilver 麦田上方的两块橡木板 (-1,64,28)、(1,64,28)",
+  "savedAt": 1791469375231,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-墙",
+  "x": -4,
+  "y": 65,
+  "z": 20,
+  "palette": {
+   "A": "acacia_log",
+   "P": "acacia_planks",
+   "G": "glass_pane",
+   "X": "oak_log:x",
+   "Z": "oak_log:z",
+   "N": "acacia_door:north",
+   "E": "acacia_door:east"
+  },
+  "layers": [
+   [
+    "APPPNPPPA",
+    "P       P",
+    "P       P",
+    "P       P",
+    "P       P",
+    "P       E",
+    "APPPPPPPA"
+   ],
+   [
+    "AGGP PGGA",
+    "P       P",
+    "G       G",
+    "G       G",
+    "G       P",
+    "P        ",
+    "APGGPGGPA"
+   ],
+   [
+    "AGGPPPGGA",
+    "P       P",
+    "G       G",
+    "G       G",
+    "G       P",
+    "P       P",
+    "APGGPGGPA"
+   ],
+   [
+    "AXXXXXXXA",
+    "Z       Z",
+    "Z       Z",
+    "Z       Z",
+    "Z       Z",
+    "Z       Z",
+    "AXXXXXXXA"
+   ]
+  ],
+  "note": "水上小屋的墙 y=65..68，坐在 y=64 的地板上。四角金合欢原木柱子，金合欢木板墙，y=68 一圈橡木原木横梁。北墙中间门 (0,65,20) 朝北对着钓鱼平台，两边 2x2 玻璃窗；东墙门 (4,65,25) 通短栈道；南墙对着 CICSilver 麦田不开门，两扇 2x2 窗；西墙三格窗、东墙两格窗，窗都在 y=66..67",
+  "savedAt": 1791547951914,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-屋顶",
+  "x": -5,
+  "y": 68,
+  "z": 19,
+  "palette": {
+   "S": "cobblestone_stairs:south",
+   "N": "cobblestone_stairs:north",
+   "C": "cobblestone",
+   "B": "cobblestone_slab:bottom",
+   "P": "acacia_planks",
+   "G": "glass_pane"
+  },
+  "layers": [
+   [
+    "SSSSSSSSSSS",
+    "           ",
+    "           ",
+    "           ",
+    "           ",
+    "           ",
+    "           ",
+    "           ",
+    "NNNNNNNNNNN"
+   ],
+   [
+    "           ",
+    "SSSSSSSSSSS",
+    " P       P ",
+    " P       P ",
+    " P       P ",
+    " P       P ",
+    " P       P ",
+    "NNNNNNNNNNN",
+    "           "
+   ],
+   [
+    "           ",
+    "           ",
+    "SSSSSSSSSSS",
+    " P       P ",
+    " G       G ",
+    " P       P ",
+    "NNNNNNNNNNN",
+    "           ",
+    "           "
+   ],
+   [
+    "           ",
+    "           ",
+    "           ",
+    "SSSSSSSSSSS",
+    "CCCCCCCCCCC",
+    "NNNNNNNNNNN",
+    "           ",
+    "           ",
+    "           "
+   ],
+   [
+    "           ",
+    "           ",
+    "           ",
+    "           ",
+    "BBBBBBBBBBB",
+    "           ",
+    "           ",
+    "           ",
+    "           "
+   ]
+  ],
+  "note": "水上小屋的屋顶：圆石楼梯斜铺的双坡顶，屋脊东西向在 z=23（y=71 一排圆石，上面压一排圆石半砖）。屋檐比墙多出一圈 x=-5..5、z=19..27。东西两头山墙 (x=±4) 用金合欢木板，正中间开一格小窗（玻璃板）。坐在墙顶 y=68 的橡木横梁上",
+  "savedAt": 1791548110594,
+  "builtAt": null
+ },
+ {
+  "name": "水上小屋-阿银的房间",
+  "x": -10,
+  "y": 64,
+  "z": 20,
+  "palette": {
+   "P": "acacia_planks",
+   "A": "acacia_log",
+   "G": "glass_pane",
+   "S": "cobblestone_stairs:south",
+   "N": "cobblestone_stairs:north",
+   "C": "cobblestone",
+   "B": "cobblestone_slab:bottom"
+  },
+  "layers": [
+   [
+    "       ",
+    " PPPPP ",
+    " PPPPP ",
+    " PPPPP ",
+    " PPPPP ",
+    " PPPPP ",
+    "       "
+   ],
+   [
+    "       ",
+    " APPPP ",
+    " P     ",
+    " P    .",
+    " P     ",
+    " APPPP ",
+    "       "
+   ],
+   [
+    "       ",
+    " APGGP ",
+    " G     ",
+    " G    .",
+    " G     ",
+    " APGGP ",
+    "       "
+   ],
+   [
+    "SSSSSS ",
+    " APPPP ",
+    " G     ",
+    " G     ",
+    " G     ",
+    " APPPP ",
+    "NNNNNN "
+   ],
+   [
+    "       ",
+    "SSSSSS ",
+    " P     ",
+    " P     ",
+    " P     ",
+    "NNNNNN ",
+    "       "
+   ],
+   [
+    "       ",
+    "       ",
+    "SSSSSS ",
+    "CCCCCC ",
+    "NNNNNN ",
+    "       ",
+    "       "
+   ],
+   [
+    "       ",
+    "       ",
+    "       ",
+    "BBBBBB ",
+    "       ",
+    "       ",
+    "       "
+   ]
+  ],
+  "note": "阿银的房间：接在水上小屋西边，共用西墙 x=-4，在 (-4,65..66,23) 开门洞相通。外墙 x=-9..-5、z=21..25，地板 y=64，墙矮一格 y=65..67；西墙 3x2 大窗看日落。小双坡顶缩在主屋西屋檐下，像矮矮的耳房",
+  "savedAt": 1791549184784,
+  "builtAt": null
+ },
+ {
+  "name": "东岸小码头-桥面",
+  "x": 7,
+  "y": 63,
+  "z": 24,
+  "palette": {
+   "P": "acacia_planks"
+  },
+  "layers": [
+   [
+    "    PP",
+    "    PP",
+    "    PP",
+    "PPPPPP",
+    "PPPPPP",
+    "PPPPPP"
+   ]
+  ],
+  "note": "从东边栈道缺口 (7,64,28) 往东伸出、再往北拐的 L 形金合欢木板桥面（y=63，高于水面一格不湿毛），借鉴《橡木小码头》的 L 形大点子",
+  "savedAt": 1792212186379,
+  "builtAt": 1792212249842
+ },
+ {
+  "name": "东岸小码头-栏杆与木桶",
+  "x": 8,
+  "y": 64,
+  "z": 24,
+  "palette": {
+   "B": "barrel:up",
+   "F": "acacia_fence",
+   "L": "lantern",
+   "S": "acacia_stairs:west"
+  },
+  "layers": [
+   [
+    "     ",
+    "     ",
+    "    S",
+    "BFF  ",
+    "     ",
+    "FFFFB"
+   ],
+   [
+    "     ",
+    "     ",
+    "     ",
+    "     ",
+    "     ",
+    "    L"
+   ]
+  ],
+  "note": "东岸 L 形小码头的木桶桩子、金合欢栅栏、看海钓鱼椅和拐角灯笼（y=64..65），北头留空方便钓鱼停船",
+  "savedAt": 1792212302152,
+  "builtAt": null
+ }
+]

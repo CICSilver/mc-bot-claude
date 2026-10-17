@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { ROOT } from './codex-config.mjs';
+import { ROOT } from './agy-config.mjs';
 
 export function loadLogs(args) {
   const logs = join(ROOT, 'logs'), runs = join(logs, 'runs');
@@ -13,7 +13,7 @@ export function loadLogs(args) {
   for (const target of targets) {
     if (!existsSync(target)) { console.log('尚无记录：' + target); continue; }
     const files = statSync(target).isDirectory()
-      ? ['fast', 'exec', 'mind'].map(layer => join(target, layer + '.jsonl')).filter(existsSync) : [target];
+      ? ['fast', 'exec', 'mind', 'planner'].map(layer => join(target, layer + '.jsonl')).filter(existsSync) : [target];
     for (const file of files) {
       let entries = readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
       if (!args.length) {
