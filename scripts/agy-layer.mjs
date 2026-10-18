@@ -141,10 +141,16 @@ try {
   if (!previousId) {
     console.log(`${layer}：${options.model} / ${options.effort}；正在初始化 Agy 会话……`);
   }
-  const startupMemory = (layer === 'fast' || layer === 'mind') ? `\n\n${buildStartupMemory(home, layer)}` : '';
-  if (layer !== 'planner') loop.enqueue(
-    `（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是${{ fast: '反应快', exec: '动手做事', mind: '拿主意' }[layer]}的那一面，按“醒来时”的步骤开始。事件监听已由启动器准备，无需调用监听工具。${startupMemory}`
-  );
+  const startupMemory = (layer === 'fast' || layer === 'mind' || layer === 'planner') ? `\n\n${buildStartupMemory(home, layer)}` : '';
+  if (layer !== 'planner') {
+    loop.enqueue(
+      `（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是${{ fast: '反应快', exec: '动手做事', mind: '拿主意' }[layer]}的那一面，按“醒来时”的步骤开始。事件监听已由启动器准备，无需调用监听工具。${startupMemory}`
+    );
+  } else if (!previousId) {
+    loop.enqueue(
+      `（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是后台规划与整理的那一面，请按醒来规划流程先用 set-todos 整理今日心愿待办清单，并写一段简短醒来日记，再通过 report-plan 告诉调度脑。${startupMemory}`
+    );
+  }
 
   createInterface({ input: process.stdin }).on('line', text => {
     if (text.trim() === '/quit') void shutdown();

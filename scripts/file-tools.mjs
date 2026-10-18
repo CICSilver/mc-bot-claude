@@ -23,7 +23,7 @@ export class Files {
       normalized = `prompts/小克/${normalized}`;
     }
     const target = resolve(this.home, normalized), roots = write ? [join(this.home, 'memory')] : this.readable;
-    if (write && this.layer !== 'mind') throw new Error('只有决策层可以修改记忆');
+    if (write && !['mind', 'planner'].includes(this.layer)) throw new Error('只有决策层和规划层可以修改记忆');
     if (!roots.some(root => inside(root, target))) throw new Error('路径越过允许范围');
     let cursor = target;
     while (!existsSync(cursor)) { const parent = dirname(cursor); if (parent === cursor) throw new Error('无效路径'); cursor = parent; }
@@ -64,12 +64,37 @@ export function fileServer(layer, home) {
   const files = new Files(layer, home), server = new McpServer({ name: 'xiaoke-files', version: '0.1.0' });
   const safe = fn => async args => { try { return fn(args); } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; } };
   server.registerTool('Read', { description: '读取本层允许的记忆、手册或参考。目录返回文件名，图片返回图像。路径相对小克 home。', inputSchema: { path: z.string() } }, safe(a => files.read(a.path)));
-  if (layer === 'mind') {
+  if (layer === 'mind' || layer === 'planner') {
     server.registerTool('Edit', { description: '精确替换 memory/*.md 中唯一匹配的原文；日记禁止修改。', inputSchema: { path: z.string(), old_string: z.string().optional(), new_string: z.string().optional(), oldText: z.string().optional(), newText: z.string().optional() } }, safe(a => files.edit(a.path, a.old_string ?? a.oldText, a.new_string ?? a.newText)));
     server.registerTool('AppendJournal', { description: '按 YYYY-MM-DD 日期追加当天日记，不能改以前的内容。', inputSchema: { date: z.string(), text: z.string() } }, safe(a => files.appendJournal(a.date, a.text)));
   }
   return server;
 }
+function unwrapArgs(raw) {
+  let cur = raw;
+  for (let i = 0; i < 4; i++) {
+    if (typeof cur === 'string') {
+      try { cur = JSON.parse(cur); } catch { break; }
+    }
+    if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+      if ('Arguments' in cur && ('ServerName' in cur || 'ToolName' in cur || Object.keys(cur).length === 1)) {
+        cur = cur.Arguments;
+        continue;
+      }
+      return cur;
+    }
+    break;
+  }
+  return (cur && typeof cur === 'object' && !Array.isArray(cur)) ? cur : {};
+}
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  await fileServer(process.argv[2], process.argv[3]).connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  await fileServer(process.argv[2], process.argv[3]).connect(transport);
+  const orig = transport.onmessage;
+  transport.onmessage = (msg, extra) => {
+    if (msg && typeof msg === 'object' && msg.method === 'tools/call' && msg.params?.arguments) {
+      msg.params.arguments = unwrapArgs(msg.params.arguments);
+    }
+    return orig?.(msg, extra);
+  };
 }

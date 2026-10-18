@@ -26,7 +26,7 @@ const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n
 const stripComments = text => text.replace(/<!--[\s\S]*?-->\n?/g, "").trim();
 
 export function buildStartupMemory(home, layer = 'fast') {
-	if (layer === 'mind') {
+	if (layer === 'mind' || layer === 'planner') {
 		const memDir = join(home, 'memory');
 		const baseFiles = ['self.md', 'people.md', 'world.md', 'goals.md']
 			.filter(name => existsSync(join(memDir, name)))
@@ -39,9 +39,12 @@ export function buildStartupMemory(home, layer = 'fast') {
 				.slice(-2)
 				.map(name => `### memory/journal/${name}\n${readFileSync(join(journalDir, name), 'utf8')}`)
 			: [];
+		const instruction = layer === 'mind'
+			? "下面是启动程序从你的 memory/ 目录读取的最新内容，醒来第 1 步已经为你读好。醒来日记和今日心愿待办拆解由后台规划脑同步负责，请不要调用 AppendJournal 写长日记，直接检查状态（get-status、get-tasks），从〔现在〕的待办或未完任务里立刻派发第一件可执行任务（assign-task）："
+			: "下面是启动程序从你的 memory/ 目录读取的最新内容。请先用 get-todos 查看现有待办，结合 memory/goals.md 用 set-todos 整理好今日心愿待办清单（3～5 项可执行小步），再用 AppendJournal 写一段简短醒来日记，最后调用 report-plan 汇总今日待办给调度脑：";
 		return [
 			"## 醒来时已自动预读的记忆（无需再用 Read 重复读取以下文件）",
-			"下面是启动程序从你的 memory/ 目录读取的最新内容，醒来第 1 步已经为你读好，请直接从检查状态（get-status、get-tasks）、写醒来日记（AppendJournal）和安排打算开始：",
+			instruction,
 			...baseFiles,
 			...journals,
 		].join("\n\n");

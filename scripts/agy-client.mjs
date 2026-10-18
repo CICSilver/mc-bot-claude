@@ -53,13 +53,22 @@ export class AgyClient extends EventEmitter {
     };
     this.child.on('error', failed);
     this.child.on('exit', code => {
-      if (!this.closing && code !== 0) {
+      if (!this.closing && child === this.child && code !== 0) {
+        this.restartCount = (this.restartCount ?? 0) + 1;
+        if (this.restartCount <= 3) {
+          this.emit('diagnostic', `agy 进程异常退出 (${code})，正在自动拉起 (${this.restartCount}/3)…\n`);
+          setTimeout(() => {
+            if (!this.closing && child === this.child) this.startProcess();
+          }, 1000);
+          return;
+        }
         failed(new Error(`agy 进程退出：${code}`));
       }
     });
   }
 
-  async interrupt() {
+  async interrupt(resetConversation = false) {
+    if (resetConversation) this.conversationId = null;
     const child = this.child;
     this.child = null;
     if (child && child.exitCode === null && child.signalCode === null) {

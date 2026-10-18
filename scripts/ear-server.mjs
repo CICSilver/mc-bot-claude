@@ -61,8 +61,8 @@ const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "Serve
 const LIVE = process.env.EAR_TEST !== "1";
 const every = (fn, ms) => { if (LIVE) setInterval(fn, ms); };
 
-// 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd”
-const NAME = "(?:\\[[^\\]]*\\] )?([A-Za-z0-9_]{1,16})";
+// 玩家在队伍里时，日志里的名字会带上队伍前缀，比如 “[小克] clawd” 或 simpleskills 的图标前缀
+const NAME = "(?:(?:\\[[^\\]]*\\]|[^A-Za-z0-9_\\s]\\S*) )*([A-Za-z0-9_]{1,16})";
 const RE_CHAT = /^(\[Not Secure\] )?<([^>]*)> (.*)$/;
 const NICK_RE = NICK.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const RE_SUMMON = new RegExp(`^(?:\\[Not Secure\\] )?\\[([A-Za-z0-9_]{1,16})\\] 召唤了${NICK_RE}`);   // 数据包 summon 函数里的 say
@@ -88,8 +88,8 @@ const ROUTES = {
 	转告: [FAST],
 	// 身体注意到的：有人冲她蹲、摸头、挥手、打她（互动），有人动了她的东西、受伤了、拿着鱼、来她家（看见），捉迷藏的进展（游戏）
 	互动: [FAST], 看见: [FAST], 环境: [FAST], 游戏: [FAST, MIND],
-	// 心情变了一档（身体算的，只有说法和原因）：嘴巴冒一句或做个表情，决策脑想想要不要改打算
-	心情: [FAST, MIND],
+	// 心情变了一档（身体算的，〔现在〕里每轮都会带，不再单独叫醒嘴巴和决策脑免得刚夸完又重复回话）
+	心情: [],
 	进展: [EXEC], 天气: [EXEC], 提醒: [MIND], 空闲: [MIND], 记下: [MIND], 下线: [MIND], 独处: [MIND], 回顾: [MIND],
 };
 
@@ -100,14 +100,16 @@ const pending = { [FAST]: [], [EXEC]: [], [MIND]: [], [PLANNER]: [] };
 const interruptAcks = new Map();
 // 只叫醒了快速反应层的事（还有小克自己在聊天里说的话、旁听到的话），攒着，下次叫醒决策脑时一起给它看。每条是 { text, overheard }
 const digest = [];
+// 给后台规划脑看的近期经过（含嘴巴那边的事和执行脑完成的汇报），方便它在后台写晨间日记和核对已完成心愿
+const plannerDigest = [];
 // 旁边的人在聊、不是对她说的话：不叫醒谁，下次叫醒快速反应层时附在后面（3 分钟内的，最多 6 句），给过一次就清掉
 const overheard = [];
 // 谁在跟她说话、她什么时候回过：接着聊的判断用
 let lastAddressed = null;   // { who, at }
 let lastSaidAt = 0;
 let lastMindAt = Date.now();
-// 给快速反应层、执行脑的事件要先问身体要〔现在〕，各排一队免得顺序乱
-const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve(), [MIND]: Promise.resolve() };
+// 给快速反应层、执行脑、决策脑、规划脑的事件要先问身体要〔现在〕，各排一队免得顺序乱
+const queues = { [FAST]: Promise.resolve(), [EXEC]: Promise.resolve(), [MIND]: Promise.resolve(), [PLANNER]: Promise.resolve() };
 let idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
 let journal = null;   // 读服务器日志的 ssh 进程，耳朵退出时一起关掉
 let busyUntil = 0;    // 小克在做后台长活（砍树、钓鱼、探险……）时不发 [空闲]，做完会有 [进展] 叫醒她
@@ -182,10 +184,19 @@ export function reviewDue(entries, sinceMindMs, reviewMs = REVIEW_MS) {
 
 function remember(entry, overheard = false) {
 	addToDigest(digest, entry, overheard);
+	addToDigest(plannerDigest, entry, overheard);
 }
 
 function takeDigest() {
-	return formatDigest(digest.splice(0));
+	const entries = digest.splice(0);
+	if (entries.length && lastAddressed && Date.now() - lastAddressed.at < 8000 && lastSaidAt < lastAddressed.at) {
+		entries.push({ text: "嘴巴正在回复最新那句聊天，你不用再调 pass-to-mouth 重复回话", overheard: false });
+	}
+	return formatDigest(entries);
+}
+
+function takePlannerDigest() {
+	return formatDigest(plannerDigest.splice(0));
 }
 
 async function withSnapshot(line, layer) {
@@ -255,12 +266,26 @@ function emit(kind, body, to = ROUTES[kind]) {
 	if (NUDGES.has(kind) && !clients[FAST].size) return;
 	const line = `${ts()} [${kind}] ${body}`;
 	console.log(`${line}  → ${to.join("+")}`);
+	if (kind === "汇报") addToDigest(plannerDigest, line.slice(6), false);
 	if (to.includes(MIND)) {
-		const input = line + takeDigest();
-		if (body.startsWith('[控制:')) void interrupt(MIND, input);
-		else queues[MIND] = queues[MIND].then(() => withSnapshot(input, MIND)).then(text => deliver(MIND, text));
+		if (body.startsWith('[控制:')) void interrupt(MIND, line + takeDigest());
+		else queues[MIND] = queues[MIND].then(async () => {
+			// [记下] 和 send-chat 常常在快层同一轮里前后脚发出：如果最近刚收到 [聊天] 而快层说出的话还没落到 latest.log，
+			// 等最多 3.5 秒让“你: ……”先进 digest，决策脑就能亲眼看到快层已经回过什么，不会再调 pass-to-mouth 说重样的话
+			if (kind === "记下" && lastAddressed && Date.now() - lastAddressed.at < 8000 && lastSaidAt < lastAddressed.at) {
+				const deadline = Date.now() + 3500;
+				while (Date.now() < deadline && lastSaidAt < lastAddressed.at) {
+					await new Promise(r => setTimeout(r, 200));
+				}
+			}
+			const text = await withSnapshot(line + takeDigest(), MIND);
+			return deliver(MIND, text);
+		}).catch(e => console.log(`${ts()} 发给${NAMES[MIND]}失败：${e}`));
 	}
-	if (to.includes(PLANNER)) deliver(PLANNER, line);
+	if (to.includes(PLANNER)) {
+		const input = line + takePlannerDigest();
+		queues[PLANNER] = queues[PLANNER].then(() => withSnapshot(input, PLANNER)).then(text => deliver(PLANNER, text)).catch(e => console.log(`${ts()} 发给${NAMES[PLANNER]}失败：${e}`));
+	}
 	// 只叫醒了快速反应层的事，攒着给决策脑看；执行脑那边的事它从 [汇报] 里知道
 	if (!to.includes(MIND) && to.includes(FAST) && !NUDGES.has(kind) && !FROM_MIND.has(kind) && !FAST_ONLY.has(kind)) remember(line.slice(6));
 	for (const layer of [FAST, EXEC]) {

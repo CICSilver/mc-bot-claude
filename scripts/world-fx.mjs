@@ -57,6 +57,7 @@ export function bubbleId(login) {
 }
 
 const LOGIN = /^[A-Za-z0-9_]{1,16}$/;
+const TAG = /^[A-Za-z0-9_]{1,24}$/;
 
 // 返回一条控制台命令；不认识的效果返回 null
 export function renderEffect(effect, login, random = Math.random) {
@@ -80,6 +81,28 @@ export function renderEffect(effect, login, random = Math.random) {
 		const p = PARTICLES[effect.name];
 		if (!p) return null;
 		return `function xiaoke_fx:particle {name:"${login}",particle:"${p[0]}",dy:"${p[1]}",dx:"${p[2]}",dyy:"${p[3]}",speed:"${p[4]}",count:"${p[5]}"}`;
+	}
+	if (effect.kind === "birth-kitten") {
+		const owner = LOGIN.test(effect.owner ?? "") ? effect.owner : login;
+		const tag = TAG.test(effect.tag ?? "") ? effect.tag : "xiaoke_baby";
+		const label = cleanText(effect.label, 24) || "小克的猫宝宝";
+		return `function xiaoke_fx:birth_kitten {name:"${login}",owner:"${owner}",tag:"${tag}",label:"${label}"}`;
+	}
+	if (effect.kind === "name-kitten") {
+		if (!TAG.test(effect.tag ?? "")) return null;
+		const label = cleanText(effect.name, 20);
+		if (!label) return null;
+		return `function xiaoke_fx:name_kitten {name:"${login}",tag:"${effect.tag}",label:"${label}"}`;
+	}
+	if (effect.kind === "birth-gift") {
+		if (effect.gift !== "crystal" && effect.gift !== "milk") return null;
+		const partner = cleanText(effect.partner, 16) || "伴侣";
+		const fn = effect.gift === "crystal" ? "birth_crystal" : "birth_milk";
+		return `function xiaoke_fx:${fn} {name:"${login}",partner:"${partner}"}`;
+	}
+	if (effect.kind === "partner-buff") {
+		if (!LOGIN.test(effect.partner ?? "")) return null;
+		return `function xiaoke_fx:partner_buff {name:"${login}",partner:"${effect.partner}"}`;
 	}
 	return null;
 }

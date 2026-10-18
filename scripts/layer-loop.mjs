@@ -105,7 +105,7 @@ export class LayerLoop extends EventEmitter {
         info.hookTool = 'Read';
       }
       const isStart = step.state === 'ACTIVE';
-      const isDone = step.state === 'DONE';
+      const isDone = step.state === 'DONE' || step.state === 'ERROR' || step.state === 'FAILED';
       if (!isStart && !isDone) return;
 
       this.emit('activity', isStart ? 'PreToolUse' : 'PostToolUse', info.hookTool);
@@ -154,9 +154,25 @@ export class LayerLoop extends EventEmitter {
     this.emit('activity', failed ? 'StopFailure' : 'Stop', '');
 
     if (failed) {
-      this.stopped = true;
-      this.emit('fatal', new Error(errorObj.message));
+      this.consecutiveFailures = (this.consecutiveFailures ?? 0) + 1;
+      const isSafety = /content safety filters|Prohibited Use policy/i.test(errorObj.message);
+      const shortErr = errorObj.message.split('\n')[0];
+      console.warn(`\n⚠️ [本轮模型输出中断 (${this.consecutiveFailures})]: ${shortErr}`);
+      // 如果是安全过滤拦截或连续两次回合失败，重启或切换干净会话继续监听，不直接关窗下线
+      if (isSafety || this.consecutiveFailures >= 2) {
+        const resetThread = isSafety && this.consecutiveFailures >= 2;
+        if (resetThread) {
+          console.warn('⚠️ 连续触发内容安全过滤，自动开启新会话线程以清除历史拦截状态…');
+          this.threadId = null;
+        }
+        void this.client.interrupt(resetThread).then(() => {
+          void this.pump();
+        });
+      } else {
+        void this.pump();
+      }
     } else {
+      this.consecutiveFailures = 0;
       void this.pump();
     }
   }
