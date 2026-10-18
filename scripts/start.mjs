@@ -22,24 +22,27 @@ process.chdir(ROOT);
 // 身体和小克这个人的配置：登录名、端口、记忆放在哪。路径相对本目录写，换台电脑也能用
 const CONFIG = JSON.parse(readFileSync("config/xiaoke-body.json", "utf8"));
 
-// 换模型、思考强度用环境变量，比如 set XIAOKE_MIND_EFFORT=high、set XIAOKE_EXEC_EFFORT=medium
+// 换模型、思考强度写在 config 的 layers 里，比如 "layers": { "mind": { "model": "claude-sonnet-5-5", "effort": "high" } }，没写的用默认。
+// 临时试一下也可以设环境变量 XIAOKE_MIND_MODEL、XIAOKE_EXEC_EFFORT 这些，优先于 config
+const layerSetting = (layer, key, fallback) =>
+	process.env[`XIAOKE_${layer.toUpperCase()}_${key.toUpperCase()}`] || CONFIG.layers?.[layer]?.[key] || fallback;
 const LAYERS = {
 	fast: {
 		name: "快速反应层",
-		model: process.env.XIAOKE_FAST_MODEL || "claude-sonnet-5-5",
-		effort: process.env.XIAOKE_FAST_EFFORT || "medium",
+		model: layerSetting("fast", "model", "claude-sonnet-5-5"),
+		effort: layerSetting("fast", "effort", "medium"),
 		wake: "你是反应快的那一面",
 	},
 	exec: {
 		name: "执行脑",
-		model: process.env.XIAOKE_EXEC_MODEL || "claude-sonnet-5-5",
-		effort: process.env.XIAOKE_EXEC_EFFORT || "low",
+		model: layerSetting("exec", "model", "claude-sonnet-5-5"),
+		effort: layerSetting("exec", "effort", "low"),
 		wake: "你是动手做事的那一面",
 	},
 	mind: {
 		name: "决策脑",
-		model: process.env.XIAOKE_MIND_MODEL || "claude-opus-5-5",
-		effort: process.env.XIAOKE_MIND_EFFORT || "xhigh",
+		model: layerSetting("mind", "model", "claude-opus-5-5"),
+		effort: layerSetting("mind", "effort", "xhigh"),
 		wake: "你是拿主意的那一面",
 	},
 };

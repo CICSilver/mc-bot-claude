@@ -253,7 +253,7 @@ Minecraft MCP 本体在旁边的 `../minecraft-mcp-server-xiaoke`，改过的代
 - 改人设、性子、生活习惯：编辑 `prompts/小克/` 里的两份；改规则、玩法技术：编辑 `prompts/系统/`。下次启动生效
 - 改空闲唤醒间隔：启动前设置环境变量 `IDLE_MIN_SECONDS` / `IDLE_MAX_SECONDS`（默认决策脑闲了 60～150 秒之间随机）
 - 改独处多久自动下线：启动前设置 `ALONE_LOGOUT_MINUTES`（默认 30）
-- 换模型或思考强度：快速反应层是 `XIAOKE_FAST_MODEL`（默认 `claude-sonnet-5-5`）、`XIAOKE_FAST_EFFORT`（默认 medium，回话还嫌慢可以试试 low）；决策脑是 `XIAOKE_MIND_MODEL`（默认 `claude-opus-5-5`）、`XIAOKE_MIND_EFFORT`（默认 xhigh，可选 low / medium / high / xhigh / max）。比如在 cmd 里 `set XIAOKE_MIND_EFFORT=high` 再运行启动脚本
+- 换模型或思考强度：改 `config/xiaoke-body.json` 的 `layers`，`fast` 快速反应层（默认 `claude-sonnet-5-5` + medium，回话还嫌慢可以试试 low）、`exec` 执行脑（默认 `claude-sonnet-5-5` + low）、`mind` 决策脑（默认 `claude-opus-5-5` + xhigh），每层写 `model`、`effort`（low / medium / high / xhigh / max），没写的用默认。临时试一下也可以设环境变量 `XIAOKE_MIND_MODEL`、`XIAOKE_FAST_EFFORT` 这些，优先于 config
 - 决策脑多久没被叫醒就让它回顾一下：`REVIEW_MINUTES`（默认 4）
 - 登录名、端口、记忆放在哪：改 `config/xiaoke-body.json`
 - 好感度阶段、门槛、每天上限：改 MCP 的 `src/relationships.ts`；小号对应关系：`config/xiaoke-body.json` 里的 `XIAOKE_ALIASES`
