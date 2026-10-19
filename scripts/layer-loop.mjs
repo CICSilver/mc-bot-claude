@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { normalizeMcpTool } from './agy-config.mjs';
+import { makeStepUsage, stepIdentity } from './telemetry.mjs';
 
 export class LayerLoop extends EventEmitter {
   constructor(client, threadId, options, log = () => {}) {
@@ -15,14 +16,27 @@ export class LayerLoop extends EventEmitter {
     this.turnSeq = 0;
     this.interruption = '';
     this.interrupting = null;
+    this.telemetryModel = options.model;
+    this.lastLoggedConversationId = this.threadId;
+    this.loggedStepTelemetry = new Map();
 
     this.onInit = msg => this.handleInit(msg);
     this.onStepUpdate = step => this.handleStepUpdate(step);
     this.onResult = res => this.handleResult(res);
+    this.onProcessStarted = info => this.log({ type: 'agy_process_started', ...info });
+    this.onNotification = msg => {
+      if (!['init', 'step_update', 'result'].includes(msg?.event)) {
+        this.log({ type: 'agy_event', conversationId: msg?.conversation_id ?? this.threadId,
+          turnId: this.active, data: msg });
+      }
+    };
 
     client.on('init', this.onInit);
     client.on('step_update', this.onStepUpdate);
     client.on('result', this.onResult);
+    client.on('process_started', this.onProcessStarted);
+    client.on('notification', this.onNotification);
+    if (client.lastProcessStart) this.onProcessStarted(client.lastProcessStart);
   }
 
   enqueue(text) {
@@ -78,16 +92,47 @@ export class LayerLoop extends EventEmitter {
 
   updateSessionId(id) {
     if (!id || id === this.threadId) return;
+    this.log({ type: 'session_changed', previousConversationId: this.lastLoggedConversationId,
+      conversationId: id, turnId: this.active });
+    this.lastLoggedConversationId = id;
     this.threadId = id;
     this.emit('session', id);
   }
 
   handleInit(msg = {}) {
     this.updateSessionId(msg.conversation_id);
+    this.telemetryModel = msg.init?.model ?? this.options.model;
+    this.log({ type: 'agy_init', conversationId: msg.conversation_id ?? this.threadId,
+      model: this.telemetryModel, init: msg.init ?? null });
+  }
+
+  logStepTelemetry(record) {
+    const identity = stepIdentity(record);
+    if (identity) {
+      const key = `${record.type}:${identity}:${record.state}`;
+      const fingerprint = JSON.stringify(record);
+      if (this.loggedStepTelemetry.get(key) === fingerprint) return;
+      this.loggedStepTelemetry.set(key, fingerprint);
+    }
+    this.log(record);
   }
 
   handleStepUpdate(step = {}) {
     this.updateSessionId(step.conversation_id);
+    const terminal = ['DONE', 'ERROR', 'FAILED'].includes(step.state);
+    const identity = { conversationId: step.conversation_id ?? this.threadId,
+      turnId: this.active, model: this.telemetryModel };
+    // Capture final usage before text/tool branches return, including empty replies.
+    if (terminal && (step.usage || step.step_type === 'agent_response')) {
+      this.logStepTelemetry(makeStepUsage(step, identity));
+    }
+    if (step.step_type === 'checkpoint' && (terminal || step.state === 'ACTIVE')) {
+      this.logStepTelemetry({ type: 'checkpoint', ...identity, stepIndex: step.step_index ?? null,
+        state: step.state, nativeStep: step });
+    } else if (terminal && !['agent_response', 'tool', 'user_input'].includes(step.step_type)) {
+      this.logStepTelemetry({ type: 'agy_step', ...identity, stepIndex: step.step_index ?? null,
+        state: step.state, nativeStep: step });
+    }
     if (step.step_type === 'agent_response' && step.text_delta) {
       this.log({ type: 'output', turnId: this.active, text: step.text_delta });
       this.emit('output', step.text_delta);
@@ -131,14 +176,16 @@ export class LayerLoop extends EventEmitter {
       const u = res.usage;
       const tokenUsage = {
         total: {
-          inputTokens: u.input_tokens ?? 0,
-          cachedInputTokens: u.cache_read_tokens ?? 0,
-          outputTokens: u.output_tokens ?? 0,
-          reasoningOutputTokens: u.thinking_tokens ?? 0,
-          totalTokens: u.total_tokens ?? 0,
+          inputTokens: u.input_tokens ?? null,
+          cachedInputTokens: u.cache_read_tokens ?? null,
+          outputTokens: u.output_tokens ?? null,
+          reasoningOutputTokens: u.thinking_tokens ?? null,
+          totalTokens: u.total_tokens ?? null,
         },
       };
-      this.log({ type: 'usage', tokenUsage });
+      this.log({ type: 'usage', conversationId: res.conversation_id ?? this.threadId,
+        turnId: this.active, usageScope: 'conversation', tokenUsage, rawUsage: u,
+        numTurns: res.num_turns ?? null, durationSeconds: res.duration_seconds ?? null });
     }
 
     const turnId = this.active ?? `turn-${++this.turnSeq}`;
@@ -162,6 +209,8 @@ export class LayerLoop extends EventEmitter {
       if (isSafety || this.consecutiveFailures >= 2) {
         const resetThread = isSafety && this.consecutiveFailures >= 2;
         if (resetThread) {
+          this.log({ type: 'conversation_reset_requested', conversationId: this.threadId,
+            turnId, reason: 'content_safety', consecutiveFailures: this.consecutiveFailures });
           console.warn('⚠️ 连续触发内容安全过滤，自动开启新会话线程以清除历史拦截状态…');
           this.threadId = null;
         }
@@ -185,5 +234,7 @@ export class LayerLoop extends EventEmitter {
     this.client.off('init', this.onInit);
     this.client.off('step_update', this.onStepUpdate);
     this.client.off('result', this.onResult);
+    this.client.off('process_started', this.onProcessStarted);
+    this.client.off('notification', this.onNotification);
   }
 }

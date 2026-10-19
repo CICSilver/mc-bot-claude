@@ -13,7 +13,7 @@ export class AgyClient extends EventEmitter {
     this.startProcess();
   }
 
-  startProcess() {
+  startProcess(reason = 'initial') {
     this.buffer = '';
     const args = this.args.filter((arg, i, all) => arg !== '--conversation' && all[i - 1] !== '--conversation');
     if (this.conversationId) args.push('--conversation', this.conversationId);
@@ -22,6 +22,13 @@ export class AgyClient extends EventEmitter {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    this.lastProcessStart = {
+      processSequence: (this.lastProcessStart?.processSequence ?? 0) + 1,
+      pid: child.pid ?? null,
+      conversationId: this.conversationId,
+      reason,
+    };
+    this.emit('process_started', this.lastProcessStart);
     this.child.stdout.setEncoding('utf8');
     this.child.stderr.setEncoding('utf8');
 
@@ -58,7 +65,7 @@ export class AgyClient extends EventEmitter {
         if (this.restartCount <= 3) {
           this.emit('diagnostic', `agy 进程异常退出 (${code})，正在自动拉起 (${this.restartCount}/3)…\n`);
           setTimeout(() => {
-            if (!this.closing && child === this.child) this.startProcess();
+            if (!this.closing && child === this.child) this.startProcess('unexpected_exit');
           }, 1000);
           return;
         }
@@ -74,7 +81,7 @@ export class AgyClient extends EventEmitter {
     if (child && child.exitCode === null && child.signalCode === null) {
       await new Promise(resolve => { child.once('exit', resolve); child.kill(); });
     }
-    if (!this.closing) this.startProcess();
+    if (!this.closing) this.startProcess(resetConversation ? 'conversation_reset' : 'interrupt_resume');
   }
 
   handleMessage(message) {
