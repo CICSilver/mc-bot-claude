@@ -134,6 +134,7 @@ function frame(text) {
 // 实际回合状态由 Codex 控制器通知身体。
 
 function deliver(layer, text) {
+	if (!text) return;
 	if (layer === MIND) lastMindAt = Date.now();
 	if (clients[layer].size === 0) {
 		pending[layer].push(text);
@@ -207,11 +208,19 @@ async function withSnapshot(line, layer) {
 	}
 	try {
 		const res = await fetch(`${BODY_URL}/snapshot`, { signal: AbortSignal.timeout(800) });
-		if (res.ok) return `${text}　${await res.text()}`;
+		if (res.ok) {
+			const state = await res.text();
+			return specialEventCurrent(line, state) ? `${text}　${state}` : null;
+		}
 	} catch {
 		// 身体还没起来或者卡住了，就只发事件本身
 	}
-	return text;
+	return specialEventCurrent(line, '') ? text : null;
+}
+
+export function specialEventCurrent(line, state) {
+	const token = /^(?:\d{2}-\d{2} \d{2}:\d{2} )?\[互动\] 〔特殊事件:([^〕]+)〕/.exec(line)?.[1];
+	return !token || state.split('｜').includes(`特殊互动：开放（凭据 ${token}）`);
 }
 
 // 一句话是不是在跟她说（10-09 用户：她跟朋友聊天时，她以为在跟她说话）。返回 { to: true/false, why }：

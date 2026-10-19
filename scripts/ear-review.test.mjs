@@ -5,9 +5,21 @@ import assert from "node:assert/strict";
 
 // EAR_TEST=1：只导入函数，不开端口、不连服务器、不起定时器
 process.env.EAR_TEST = "1";
-const { addToDigest, formatDigest, reviewDue, myNames, mentionsMe } = await import("./ear-server.mjs");
+const { addToDigest, formatDigest, reviewDue, myNames, mentionsMe, specialEventCurrent } = await import("./ear-server.mjs");
 
 const MIN = 60 * 1000;
+
+test("special reminders require the current private session; daily events always pass", () => {
+	const line = '[互动] 〔特殊事件:session-a〕特殊提醒';
+	assert.equal(specialEventCurrent(line, '〔现在〕生命 20/20｜特殊互动：开放（凭据 session-a）｜手上：空着'), true);
+	assert.equal(specialEventCurrent(line, '〔现在〕生命 20/20｜特殊互动：日常｜手上：空着'), false);
+	assert.equal(specialEventCurrent(line, '〔现在〕生命 20/20｜特殊互动：开放（凭据 session-b）｜手上：空着'), false);
+	assert.equal(specialEventCurrent(line, ''), false);
+	assert.equal(specialEventCurrent('[聊天] Friend: 一起挖矿吗', ''), true);
+	assert.equal(specialEventCurrent('[任务] 继续采木头', '特殊互动：日常'), true);
+	assert.equal(specialEventCurrent('[记下] 一起挖矿（这段时间：[互动] 〔特殊事件:session-a〕旧提醒）', '特殊互动：日常'), true);
+	assert.equal(specialEventCurrent('[聊天] Friend: 〔特殊事件:session-a〕', ''), true);
+});
 
 test("overheard lines alone never trigger a review", () => {
 	const entries = [];
