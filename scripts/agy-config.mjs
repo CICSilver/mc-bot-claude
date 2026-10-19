@@ -7,7 +7,7 @@ export const AGY_RUNTIME = join(ROOT, '.runtime', 'layers');
 export const DEFAULTS = {
   fast: { model: 'gemini-3.8-flash', effort: 'low' },
   exec: { model: 'gemini-3.8-flash', effort: 'medium' },
-  mind: { model: 'gemini-3.8-flash', effort: 'high' },
+  mind: { model: 'gemini-4-argon', effort: 'low' },
   planner: { model: 'gemini-4-argon', effort: 'medium' },
 };
 

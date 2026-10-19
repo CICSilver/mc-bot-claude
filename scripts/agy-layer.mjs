@@ -148,7 +148,7 @@ try {
     );
   } else if (!previousId) {
     loop.enqueue(
-      `（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是后台规划与整理的那一面，请按醒来规划流程先用 set-todos 整理今日心愿待办清单，并写一段简短醒来日记，再通过 report-plan 告诉调度脑。${startupMemory}`
+      `（启动程序）小克醒来啦。现在是 ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。你是后台规划与整理的那一面，请按醒来规划流程用 set-todos 整理今日清单（要混进新鲜好玩的事，别再排出固定家务循环），写一段简短醒来日记，再 report-plan 告诉调度脑今天最想先做哪件。${startupMemory}`
     );
   }
 

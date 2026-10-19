@@ -19,7 +19,7 @@ const LAYER_FILES = { fast: "prompts/系统/快.md", exec: "prompts/系统/执�
 export const LAYER_NAMES = Object.keys(LAYER_FILES);
 // 哪一层带人格、生活、说话习惯，哪一层有手册目录、参考的概要（一共几份、有哪些标签）
 const WITH_PERSONA = new Set(["fast", "mind", "planner"]);
-const WITH_MANUALS = new Set(["exec", "planner"]);
+const WITH_MANUALS = new Set(["exec", "mind", "planner"]);
 const WITH_REFERENCES = new Set(["planner"]);
 const read = path => readFileSync(join(ROOT, path), "utf8").replace(/\r\n/g, "\n");
 // <!-- --> 里是写给维护的人看的说明，不给小克
@@ -40,8 +40,8 @@ export function buildStartupMemory(home, layer = 'fast') {
 				.map(name => `### memory/journal/${name}\n${readFileSync(join(journalDir, name), 'utf8')}`)
 			: [];
 		const instruction = layer === 'mind'
-			? "下面是启动程序从你的 memory/ 目录读取的最新内容，醒来第 1 步已经为你读好。醒来日记和今日心愿待办拆解由后台规划脑同步负责，请不要调用 AppendJournal 写长日记，直接检查状态（get-status、get-tasks），从〔现在〕的待办或未完任务里立刻派发第一件可执行任务（assign-task）："
-			: "下面是启动程序从你的 memory/ 目录读取的最新内容。请先用 get-todos 查看现有待办，结合 memory/goals.md 用 set-todos 整理好今日心愿待办清单（3～5 项可执行小步），再用 AppendJournal 写一段简短醒来日记，最后调用 report-plan 汇总今日待办给调度脑：";
+			? "下面是启动程序从你的 memory/ 目录读取的最新内容，醒来第 1 步已经为你读好。醒来日记和今日心愿待办拆解由后台规划脑同步负责，请不要调用 AppendJournal 写长日记。请检查状态（get-status、get-tasks），看谁在线、自己心情，再立刻派一件完整的活让身体动起来：可以是待办里此刻最想做的一项（不必从第一号开始），也可以是没写在待办上的即兴小事；有熟人在旁边就优先去陪。不要默认每次都先看信箱、巡麦田、喂堆肥："
+			: "下面是启动程序从你的 memory/ 目录读取的最新内容。请先用 get-todos 查看现有待办，结合 memory/goals.md 用 set-todos 整理今日清单（3～5 项）：至少 1～2 件好玩/新鲜/探索/装饰类，家务维护最多 1～2 条，禁止再生成“信箱→麦田→堆肥→喂牛→钓鱼睡觉”固定循环。写一段简短醒来日记后，用 report-plan 告诉调度脑今天最想先做哪件新鲜事：";
 		return [
 			"## 醒来时已自动预读的记忆（无需再用 Read 重复读取以下文件）",
 			instruction,

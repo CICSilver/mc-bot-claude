@@ -24,8 +24,8 @@
       "effort": "medium"
     },
     "mind": {
-      "model": "gemini-3.8-flash",
-      "effort": "high"
+      "model": "gemini-4-argon",
+      "effort": "low"
     },
     "planner": {
       "model": "gemini-4-argon",
