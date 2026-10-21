@@ -333,6 +333,7 @@ def main():
         test_cp = [str(CLASSES), str(TEST_CLASSES), *cp]
         run_java(java, test_cp, "local.xiaoke.bridge.SelfCheck")
         run_java(java, test_cp, "local.xiaoke.bridge.McCheck")
+        run_java(java, test_cp, "local.xiaoke.bridge.RegionCheck")
 
     package(mod_json)
 
