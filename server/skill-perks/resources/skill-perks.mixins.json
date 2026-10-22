@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "local.xiaoke.perks.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": ["DamageMixin", "ProjectileMixin", "AmmoMixin", "RangedExperienceMixin", "EnchantingPlayerMixin", "EnchantingMenuMixin", "AnvilMixin"],
+  "injectors": {"defaultRequire": 1}
+}

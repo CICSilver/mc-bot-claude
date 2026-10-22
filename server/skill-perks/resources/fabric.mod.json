@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "skill-perks",
+  "version": "1.1.0",
+  "name": "Skill Perks",
+  "description": "采矿、挖掘和伐木的等级速度加成，以及随等级成长的额外资源掉落。",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "local.xiaoke.perks.SkillPerks"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~26.1-",
+    "java": ">=25",
+    "fabric-api": "*",
+    "simpleskills": "*"
+  },
+  "mixins": [
+    "skill-perks.mixins.json"
+  ]
+}

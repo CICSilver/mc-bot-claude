@@ -1,0 +1,144 @@
+{
+  "skills": {
+    "MINING": {
+      "toolTag": "minecraft:pickaxes",
+      "speedPerLevel": 0.01,
+      "blocks": [
+        "minecraft:stone",
+        "minecraft:cobblestone",
+        "minecraft:deepslate",
+        "minecraft:cobbled_deepslate",
+        "minecraft:granite",
+        "minecraft:diorite",
+        "minecraft:andesite",
+        "minecraft:tuff",
+        "minecraft:blackstone",
+        "minecraft:basalt"
+      ],
+      "rewards": [
+        {
+          "item": "minecraft:coal",
+          "minLevel": 1,
+          "chanceAt99": 0.1,
+          "count": 1
+        },
+        {
+          "item": "minecraft:raw_iron",
+          "minLevel": 10,
+          "chanceAt99": 0.05,
+          "count": 1
+        },
+        {
+          "item": "minecraft:raw_gold",
+          "minLevel": 25,
+          "chanceAt99": 0.02,
+          "count": 1
+        },
+        {
+          "item": "minecraft:redstone",
+          "minLevel": 35,
+          "chanceAt99": 0.015,
+          "count": 1
+        },
+        {
+          "item": "minecraft:lapis_lazuli",
+          "minLevel": 45,
+          "chanceAt99": 0.01,
+          "count": 1
+        },
+        {
+          "item": "minecraft:diamond",
+          "minLevel": 60,
+          "chanceAt99": 0.0015,
+          "count": 1
+        },
+        {
+          "item": "minecraft:emerald",
+          "minLevel": 75,
+          "chanceAt99": 0.0005,
+          "count": 1
+        }
+      ]
+    },
+    "EXCAVATING": {
+      "toolTag": "minecraft:shovels",
+      "speedPerLevel": 0.01,
+      "blocks": [
+        "minecraft:dirt",
+        "minecraft:grass_block",
+        "minecraft:coarse_dirt",
+        "minecraft:rooted_dirt",
+        "minecraft:podzol",
+        "minecraft:mycelium",
+        "minecraft:dirt_path",
+        "minecraft:sand",
+        "minecraft:red_sand",
+        "minecraft:gravel",
+        "minecraft:mud",
+        "minecraft:clay",
+        "minecraft:soul_sand",
+        "minecraft:soul_soil"
+      ],
+      "rewards": [
+        {
+          "item": "minecraft:flint",
+          "minLevel": 1,
+          "chanceAt99": 0.03,
+          "count": 1
+        },
+        {
+          "item": "minecraft:clay_ball",
+          "minLevel": 1,
+          "chanceAt99": 0.02,
+          "count": 1
+        },
+        {
+          "item": "minecraft:iron_nugget",
+          "minLevel": 10,
+          "chanceAt99": 0.01,
+          "count": 1
+        },
+        {
+          "item": "minecraft:bone",
+          "minLevel": 20,
+          "chanceAt99": 0.005,
+          "count": 1
+        },
+        {
+          "item": "minecraft:gold_nugget",
+          "minLevel": 25,
+          "chanceAt99": 0.003,
+          "count": 1
+        },
+        {
+          "item": "minecraft:diamond",
+          "minLevel": 75,
+          "chanceAt99": 0.0001,
+          "count": 1
+        },
+        {
+          "item": "minecraft:emerald",
+          "minLevel": 85,
+          "chanceAt99": 5e-05,
+          "count": 1
+        }
+      ]
+    },
+    "WOODCUTTING": {
+      "toolTag": "minecraft:axes",
+      "speedPerLevel": 0.01,
+      "blocks": [],
+      "rewards": []
+    }
+  },
+  "combat": {
+    "meleeDamagePerLevel": 0.005,
+    "rangedDamagePerLevel": 0.005,
+    "defenseReductionPerLevel": 0.002,
+    "arrowRefundPerLevel": 0.0025
+  },
+  "enchanting": {
+    "levelPreservationPerLevel": 0.003,
+    "upgradeChancePerLevel": 0.002
+  }
+}

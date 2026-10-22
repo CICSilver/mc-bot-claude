@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { setTimeout as delay } from 'node:timers/promises';
 import { normalizeMcpTool } from './agy-config.mjs';
 import { makeStepUsage, stepIdentity } from './telemetry.mjs';
 
@@ -19,6 +20,11 @@ export class LayerLoop extends EventEmitter {
     this.telemetryModel = options.model;
     this.lastLoggedConversationId = this.threadId;
     this.loggedStepTelemetry = new Map();
+    this.stepCursors = new Map();
+    this.turnSteps = null;
+    this.recoveryAbort = null;
+    this.queryCount = 0;
+    this.queryStep = null;
 
     this.onInit = msg => this.handleInit(msg);
     this.onStepUpdate = step => this.handleStepUpdate(step);
@@ -59,6 +65,9 @@ export class LayerLoop extends EventEmitter {
         this.interruption = '';
         const turnId = `turn-${++this.turnSeq}`;
         this.active = turnId;
+        this.queryCount = 0;
+        this.queryStep = null;
+        this.beginTurnSteps(this.threadId);
         this.log({ type: 'turn_started', turnId });
         this.emit('activity', 'UserPromptSubmit', '');
         await this.client.sendUserMessage(text);
@@ -74,9 +83,12 @@ export class LayerLoop extends EventEmitter {
 
   async interrupt(text, resume = true) {
     if (this.stopped) return;
+    this.recoveryAbort?.abort();
     if (this.interrupting) await this.interrupting;
     const turnId = this.active;
     this.active = null;
+    this.turnSteps = null;
+    this.consecutiveFailures = 0;
     this.queue.length = 0;
     this.interruption = `（最新控制要求）${text}`;
     this.log({ type: 'turn_interrupted', turnId, text, resume });
@@ -96,6 +108,7 @@ export class LayerLoop extends EventEmitter {
       conversationId: id, turnId: this.active });
     this.lastLoggedConversationId = id;
     this.threadId = id;
+    if (this.active && this.turnSteps?.conversationId !== id) this.beginTurnSteps(id);
     this.emit('session', id);
   }
 
@@ -117,9 +130,30 @@ export class LayerLoop extends EventEmitter {
     this.log(record);
   }
 
+  beginTurnSteps(conversationId) {
+    this.turnSteps = {
+      conversationId, start: this.stepCursors.get(conversationId) ?? -1,
+      response: -1, error: -1, pending: new Set(),
+    };
+  }
+
   handleStepUpdate(step = {}) {
     this.updateSessionId(step.conversation_id);
     const terminal = ['DONE', 'ERROR', 'FAILED'].includes(step.state);
+    const index = step.step_index;
+    if (Number.isInteger(index)) {
+      const id = step.conversation_id ?? this.threadId;
+      this.stepCursors.set(id, Math.max(index, this.stepCursors.get(id) ?? -1));
+      const turn = this.turnSteps;
+      if (this.active && turn && index > turn.start) {
+        if (step.state === 'ACTIVE') turn.pending.add(index);
+        if (terminal) turn.pending.delete(index);
+        if (step.step_type === 'agent_response' && step.state === 'DONE') turn.response = Math.max(turn.response, index);
+        if ((step.step_type === 'error_message' && terminal) || ['ERROR', 'FAILED'].includes(step.state)) {
+          turn.error = Math.max(turn.error, index);
+        }
+      }
+    }
     const identity = { conversationId: step.conversation_id ?? this.threadId,
       turnId: this.active, model: this.telemetryModel };
     // Capture final usage before text/tool branches return, including empty replies.
@@ -166,12 +200,30 @@ export class LayerLoop extends EventEmitter {
         if (isStart) {
           this.emit('tool', info);
         }
+        const key = `${step.conversation_id}:${index}`;
+        if (isDone && this.active && this.options.layer === 'exec' && info.server === 'minecraft' && key !== this.queryStep) {
+          this.queryStep = key;
+          if (/^(get-|list-|find-|look-|survey-)/.test(info.tool)) this.queryCount++;
+          else if (!/^(murmur|send-chat)$/.test(info.tool)) this.queryCount = 0;
+          if (this.queryCount >= 12) {
+            const pending = this.queue.join('\n');
+            const message = '连续查询已达 12 次，现场信息已收集。请根据已有信息选择具体动作，或将选址交给规划脑。';
+            this.log({ type: 'query_yield', turnId: this.active, queryCount: this.queryCount });
+            void this.interrupt(pending || message, Boolean(pending)).then(() => {
+              if (!pending) this.emit('blocked', message);
+            }).catch(error => this.emit('fatal', error));
+          }
+        }
       }
     }
   }
 
   handleResult(res = {}) {
     this.updateSessionId(res.conversation_id);
+    if (!this.active) {
+      this.log({ type: 'unmatched_result', conversationId: this.threadId, rawStatus: res.status, rawError: res.error ?? null });
+      return;
+    }
     if (res.usage) {
       const u = res.usage;
       const tokenUsage = {
@@ -188,15 +240,25 @@ export class LayerLoop extends EventEmitter {
         numTurns: res.num_turns ?? null, durationSeconds: res.duration_seconds ?? null });
     }
 
-    const turnId = this.active ?? `turn-${++this.turnSeq}`;
+    const turnId = this.active;
+    const steps = this.turnSteps;
     this.active = null;
-    const failed = res.status !== 'SUCCESS';
+    this.turnSteps = null;
+    const completedTail = steps && steps.response > Math.max(steps.start, steps.error) && steps.pending.size === 0;
+    const recovered = res.status !== 'SUCCESS' && completedTail;
+    const failed = res.status !== 'SUCCESS' && !recovered;
     const errorObj = failed ? { message: res.error || `模型回合失败 (${res.status})` } : null;
     this.log({
       type: 'turn_completed',
       turnId,
       status: failed ? 'failed' : 'completed',
       error: errorObj,
+      rawStatus: res.status,
+      rawError: res.error ?? null,
+      resultKind: recovered ? (steps.error > steps.start ? 'recovered' : 'historical_error') : failed ? 'failed' : 'success',
+      stepStart: steps?.start ?? null,
+      lastResponseStep: steps?.response ?? null,
+      lastErrorStep: steps?.error ?? null,
     });
     this.emit('activity', failed ? 'StopFailure' : 'Stop', '');
 
@@ -205,20 +267,13 @@ export class LayerLoop extends EventEmitter {
       const isSafety = /content safety filters|Prohibited Use policy/i.test(errorObj.message);
       const shortErr = errorObj.message.split('\n')[0];
       console.warn(`\n⚠️ [本轮模型输出中断 (${this.consecutiveFailures})]: ${shortErr}`);
-      // 如果是安全过滤拦截或连续两次回合失败，重启或切换干净会话继续监听，不直接关窗下线
-      if (isSafety || this.consecutiveFailures >= 2) {
-        const resetThread = isSafety && this.consecutiveFailures >= 2;
-        if (resetThread) {
-          this.log({ type: 'conversation_reset_requested', conversationId: this.threadId,
-            turnId, reason: 'content_safety', consecutiveFailures: this.consecutiveFailures });
-          console.warn('⚠️ 连续触发内容安全过滤，自动开启新会话线程以清除历史拦截状态…');
-          this.threadId = null;
-        }
-        void this.client.interrupt(resetThread).then(() => {
-          void this.pump();
-        });
-      } else {
+      if (isSafety || this.consecutiveFailures > 2) {
+        this.log({ type: 'turn_blocked', turnId, reason: isSafety ? 'content_safety' : 'retry_limit' });
+        this.emit('blocked', isSafety ? '本轮模型返回内容限制，当前任务需要调度处理。' : '本轮连接恢复已尝试两次，当前任务需要调度处理。');
+        this.consecutiveFailures = 0;
         void this.pump();
+      } else {
+        this.recover(this.options.retryDelays?.[this.consecutiveFailures - 1] ?? this.consecutiveFailures * 1000);
       }
     } else {
       this.consecutiveFailures = 0;
@@ -226,8 +281,29 @@ export class LayerLoop extends EventEmitter {
     }
   }
 
+  recover(waitMs) {
+    const abort = this.recoveryAbort = new AbortController();
+    this.log({ type: 'recovery_scheduled', attempt: this.consecutiveFailures, waitMs });
+    this.interrupting = (async () => {
+      try {
+        await delay(waitMs, undefined, { signal: abort.signal });
+        await this.client.interrupt();
+        if (!abort.signal.aborted && !this.stopped && !this.queue.length) {
+          this.queue.push(this.options.recoveryText ?? '连接已经恢复。核对当前任务与已完成的步骤，接着处理剩余工作。');
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') { this.stopped = true; this.emit('fatal', error); }
+      } finally {
+        this.interrupting = null;
+        this.recoveryAbort = null;
+        if (!abort.signal.aborted) void this.pump();
+      }
+    })();
+  }
+
   async stop() {
     this.stopped = true;
+    this.recoveryAbort?.abort();
     this.queue.length = 0;
     this.active = null;
     this.emit('activity', 'Stop', '');

@@ -111,7 +111,7 @@ test('final cumulative usage keeps its conversation and does not fill missing co
   await loop.stop();
 });
 
-test('safety reset logs its cause and preserves the old ID for the next session change', async () => {
+test('current content restriction is handed back as a blocked turn', async () => {
   const { client, loop, logs } = createLoop();
   const interruptions = [];
   client.interrupt = async reset => { interruptions.push(Boolean(reset)); };
@@ -120,14 +120,9 @@ test('safety reset logs its cause and preserves the old ID for the next session 
     client.emit('result', { conversation_id: 'conv-1', status: 'ERROR', error: 'content safety filters' });
     await Promise.resolve();
   }
-  client.emit('init', { conversation_id: 'conv-2', init: { model: 'gemini-3.8-flash' } });
-  assert.deepEqual(interruptions, [false, true]);
-  const reset = logs.find(e => e.type === 'conversation_reset_requested');
-  assert.equal(reset.conversationId, 'conv-1');
-  assert.equal(reset.reason, 'content_safety');
-  const change = logs.findLast(e => e.type === 'session_changed');
-  assert.equal(change.previousConversationId, 'conv-1');
-  assert.equal(change.conversationId, 'conv-2');
+  assert.deepEqual(interruptions, []);
+  assert.equal(logs.filter(e => e.type === 'turn_blocked' && e.reason === 'content_safety').length, 2);
+  assert.equal(loop.threadId, 'conv-1');
   await loop.stop();
 });
 
