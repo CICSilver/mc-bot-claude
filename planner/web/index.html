@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="mc-catalog" content="./plans/index.json">
+<title>逐层建造 · MC 建筑规划</title>
+<link rel="icon" href="./favicon.png">
+<link rel="stylesheet" href="./app/app.css">
+<script>(function(){try{var t=localStorage.getItem('mc-planner:v2:theme')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+<script type="importmap">{"imports":{"three":"./assets/three/build/three.module.js","three/addons/":"./assets/three/examples/jsm/"}}</script>
+<script src="./assets/lucide/lucide-1.17.0.js" defer></script>
+<script src="./app/app.js" type="module"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <i class="sakura" data-icon="flower-2" aria-hidden="true"></i>
+    <div><small>MINECRAFT · 逐层建造</small><h1 id="title">正在加载…</h1></div>
+  </div>
+  <div class="selectors">
+    <label class="field"><span>方案</span><select id="plan" aria-label="建筑方案"></select></label>
+    <label class="field"><span>章节</span><select id="chapter" aria-label="建造章节"></select></label>
+    <label class="field" id="palette-wrap"><span>配色</span><select id="palette" aria-label="配色"></select></label>
+  </div>
+  <div class="overall" title="整体进度（当前设备、当前配色）">
+    <div class="meter"><i id="overall-bar"></i></div><span id="overall-text">—</span>
+  </div>
+  <div class="actions">
+    <a id="overview" class="btn icon" href="./overview.html" title="整体预览" aria-label="整体预览" hidden><i data-icon="orbit"></i></a>
+    <button id="share" class="btn icon" title="复制当前视图链接" aria-label="复制链接"><i data-icon="link"></i></button>
+    <button id="theme" class="btn icon" title="切换明暗（自动/浅色/深色）" aria-label="切换主题"><i data-icon="sun-moon"></i></button>
+  </div>
+</header>
+<div id="error" role="alert" hidden></div>
+<main class="app">
+  <section class="stage" aria-label="逐层图纸">
+    <div class="stagebar">
+      <div class="layerhead">
+        <button id="down" class="btn icon" title="下一层（↓ / S / PageDown）" aria-label="下一层"><i data-icon="chevron-down"></i></button>
+        <label class="ylabel" title="输入 Y 直接跳转（也可直接敲数字键）"><span>Y</span><input id="yinput" type="number" inputmode="numeric" step="1" aria-label="世界 Y 坐标"></label>
+        <button id="up" class="btn icon" title="上一层（↑ / W / PageUp）" aria-label="上一层"><i data-icon="chevron-up"></i></button>
+        <div class="layermeta"><b id="layer-index">—</b><span id="layer-sub"></span></div>
+        <button id="layer-done" class="btn done-btn" title="标记本层完成 (D)"><i data-icon="check-check"></i><span>本层完成</span></button>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="视图">
+          <button data-view="plan" title="二维逐层网格 (V)"><i data-icon="grid-2x2"></i><span>平面</span></button>
+          <button data-view="split" class="wide-only" title="平面 + 三维并排 (V)"><i data-icon="columns-2"></i><span>并排</span></button>
+          <button data-view="3d" title="三维 (V)"><i data-icon="box"></i><span>三维</span></button>
+        </div>
+        <div class="seg" role="group" aria-label="显示范围">
+          <button data-display="single" title="仅显示本层 (M)"><span>仅本层</span></button>
+          <button data-display="below" title="本层 + 淡显下方 (M)"><span>含下层</span></button>
+          <button data-display="full" title="全部结构，高亮本层 (M)"><span>全部</span></button>
+        </div>
+        <div class="toggles">
+          <button id="place-mode" class="btn chip" aria-pressed="false" title="勾选模式：点击方块即标记已放置（也可 Shift+点击）"><i data-icon="square-check"></i><span>勾选</span></button>
+          <button id="clip" class="btn chip" aria-pressed="true" title="三维剖切：隐藏当前层以上 (C)"><i data-icon="scissors"></i><span>剖切</span></button>
+          <button id="terrain" class="btn chip" aria-pressed="false" title="显示现有地形快照 (T)"><i data-icon="mountain"></i><span>地形</span></button>
+          <button id="texture" class="btn chip" aria-pressed="true" title="平面图：贴图 / 纯色"><i data-icon="image"></i><span>贴图</span></button>
+          <span class="zoom">
+            <button id="zoom-out" class="btn icon sm" title="缩小 (-)" aria-label="缩小"><i data-icon="zoom-out"></i></button>
+            <button id="zoom-in" class="btn icon sm" title="放大 (+)" aria-label="放大"><i data-icon="zoom-in"></i></button>
+            <button id="fit" class="btn icon sm" title="适合画面 (F)" aria-label="适合画面"><i data-icon="scan"></i></button>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="views" id="views" data-view="split">
+      <div class="ruler-wrap" title="点击/拖动跳层；滚轮逐层">
+        <div class="ruler-head">Y 层</div>
+        <canvas id="ruler" aria-label="Y 层尺"></canvas>
+      </div>
+      <div class="pane pane2d">
+        <canvas id="grid" aria-label="当前层俯视网格"></canvas>
+        <div class="pane-tag"><b>俯视</b> 北 ↑ (−Z) · 东 → (+X)</div>
+      </div>
+      <div class="pane pane3d">
+        <div id="scene" role="img" aria-label="三维视图"></div>
+        <div class="pane-tag" id="tag3d"></div>
+      </div>
+    </div>
+    <div class="inspector" id="inspector" aria-live="polite"></div>
+  </section>
+  <aside class="side">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="materials" aria-selected="true"><i data-icon="package"></i>材料</button>
+      <button role="tab" data-tab="progress" aria-selected="false"><i data-icon="check-check"></i>进度</button>
+      <button role="tab" data-tab="info" aria-selected="false"><i data-icon="info"></i>资料</button>
+    </nav>
+    <section class="panel" data-panel="materials">
+      <div class="panel-head">
+        <div class="seg small" role="group" aria-label="材料范围">
+          <button data-scope="layer" aria-pressed="true">本层</button><button data-scope="chapter">本章</button><button data-scope="all">全部</button>
+        </div>
+        <button id="copy-materials" class="btn icon sm" title="复制材料清单" aria-label="复制材料清单"><i data-icon="copy"></i></button>
+        <button id="clear-filter" class="btn icon sm" title="取消材质高亮" aria-label="取消材质高亮" hidden><i data-icon="filter-x"></i></button>
+      </div>
+      <p id="mat-summary" class="muted"></p>
+      <div id="materials" class="materials"></div>
+      <details class="legend"><summary>图例说明</summary>
+        <ul>
+          <li><span class="lg arrow">➜</span>楼梯朝向（高背面一侧）；<b>倒</b>=倒置楼梯，<b>内/外</b>=转角</li>
+          <li><b class="lgb">上</b><b class="lgb">下</b><b class="lgb">双</b> 台阶位置；<b class="lgb">吊</b> 悬挂灯笼；<b class="lgb">门</b><b class="lgb">头</b> 门 / 床</li>
+          <li><span class="lg tri">▶</span>门、活板门、床等的朝向；<span class="lg">—</span>/<span class="lg">○</span> 原木横放 / 竖放</li>
+          <li><span class="lg dashed"></span>本层其他章节（参照，不计入材料）</li>
+          <li><span class="lg auto"></span>自动生成格（门上半、床头，不需要材料）</li>
+          <li><span class="lg ghost"></span>下一层虚影（对齐用）；<span class="lg hatch"></span>现有地形</li>
+          <li><span class="lg ok">✓</span>已放置；<span class="lg x">✕</span>施工前需处理；<span class="lg o">○</span>扩建接口</li>
+          <li>网格：细线每格，<b>粗线每 5 格</b>，<b class="c16">彩色线 = 区块边界（每 16 格）</b></li>
+        </ul>
+      </details>
+    </section>
+    <section class="panel" data-panel="progress" hidden>
+      <div class="prog-card">
+        <div class="prog-row"><span>本层</span><div class="meter"><i id="p-layer"></i></div><b id="p-layer-t"></b></div>
+        <div class="prog-row"><span>本章</span><div class="meter"><i id="p-chapter"></i></div><b id="p-chapter-t"></b></div>
+        <div class="prog-row"><span>整体</span><div class="meter"><i id="p-all"></i></div><b id="p-all-t"></b></div>
+      </div>
+      <p class="muted small">完成记录 · 当前设备 · 当前配色</p>
+      <h3>各章节</h3>
+      <div id="chapters" class="chapters"></div>
+      <button id="clear-layer" class="btn ghost-btn sm">清除本层记录</button>
+    </section>
+    <section class="panel" data-panel="info" hidden>
+      <p id="chapter-note" class="note"></p>
+      <details id="d-prep" open><summary>施工前准备 <span id="n-prep" class="count"></span></summary><div id="prep" class="list"></div></details>
+      <details id="d-supports"><summary>基础桩位与柱长 <span id="n-supports" class="count"></span></summary><div id="supports" class="list"></div></details>
+      <details id="d-ports"><summary>扩建接口 <span id="n-ports" class="count"></span></summary><div id="ports" class="list"></div></details>
+      <details open><summary>方案与资料</summary><div id="resources" class="list"></div><p id="snapshot" class="muted small"></p></details>
+    </section>
+  </aside>
+</main>
+<div id="tip" class="tip" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

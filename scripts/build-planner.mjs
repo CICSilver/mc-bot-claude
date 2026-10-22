@@ -1,0 +1,23 @@
+import {copyFileSync,mkdirSync,readFileSync,existsSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+
+const output=process.argv[2];
+if(!output)throw Error('Usage: node scripts/build-planner.mjs <existing-site-directory>');
+const out=resolve(output),source=fileURLToPath(new URL('../planner/web/',import.meta.url));
+const catalogFile=join(out,'plans/index.json'),catalog=JSON.parse(readFileSync(catalogFile,'utf8'));
+const hash=file=>createHash('sha256').update(readFileSync(file)).digest('hex');
+const plans=catalog.plans.map(p=>({id:p.id,file:resolve(out,'plans',p.url)}));
+const before=[catalogFile,...plans.map(p=>p.file)].map(file=>({file,hash:hash(file)}));
+if(!existsSync(join(out,'assets/three/build/three.module.js'))||!existsSync(join(out,'assets/lucide/lucide-1.17.0.js')))throw Error('The existing Three.js and Lucide assets are required');
+mkdirSync(join(out,'app'),{recursive:true});mkdirSync(join(out,'v2'),{recursive:true});
+const current=join(out,'index.html'),legacy=join(out,'legacy.html');
+if(!existsSync(legacy)&&existsSync(current)&&readFileSync(current,'utf8').includes('./guide/guide.js'))copyFileSync(current,legacy);
+for(const name of['app','grid2d','plan','ruler','scene3d'])copyFileSync(join(source,'js',name+'.js'),join(out,'app',name+'.js'));
+copyFileSync(join(source,'css/app.css'),join(out,'app/app.css'));
+copyFileSync(join(source,'v2-redirect.html'),join(out,'v2/index.html'));
+copyFileSync(join(source,'index.html'),current);
+for(const entry of before)if(hash(entry.file)!==entry.hash)throw Error('Plan data changed during UI build: '+entry.file);
+writeFileSync(join(out,'planner-build.json'),JSON.stringify({ui:'merged-v2',schemaVersion:1,plans:plans.map(p=>p.id)},null,2));
+console.log(JSON.stringify({output:out,plans:plans.map(p=>p.id),planDataUnchanged:true,legacyView:existsSync(legacy)}));
