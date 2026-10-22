@@ -8,6 +8,9 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.world.InteractionResult;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -51,13 +54,22 @@ public final class XiaokeBridge implements ModInitializer {
         config = result.config;
         LOG.info("[xiaoke-bridge] 已加载：小克名单 {}，普通玩家能坐：{}", config.bots(), config.playersCanSit());
 
+        UseEntityCallback.EVENT.register((player, level, hand, entity, hit) ->
+                Regions.consumes(player) ? InteractionResult.FAIL : InteractionResult.PASS);
+        UseItemCallback.EVENT.register((player, level, hand) ->
+                Regions.consumes(player) ? InteractionResult.FAIL : InteractionResult.PASS);
+        UseBlockCallback.EVENT.register(Regions::onUseBlock);
         UseEntityCallback.EVENT.register(BotInteractions::onUseEntity);
         UseBlockCallback.EVENT.register(Seats::onUseBlock);
         ServerTickEvents.END_SERVER_TICK.register(Seats::onServerTick);
         ServerTickEvents.END_SERVER_TICK.register(HandOver::onServerTick);
+        ServerTickEvents.END_SERVER_TICK.register(Regions::tick);
+        ServerLifecycleEvents.SERVER_STARTED.register(Regions::start);
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> Regions.disconnect(handler.player));
         ServerEntityEvents.ENTITY_LOAD.register(Seats::onEntityLoad);
         ServerEntityEvents.ENTITY_UNLOAD.register(Seats::onEntityUnload);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            Regions.stop();
             Seats.clear();
             BotInteractions.clear();
             HandOver.clear();
@@ -65,6 +77,7 @@ public final class XiaokeBridge implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> {
             registerCommand(dispatcher);
             HandOver.register(dispatcher);
+            Regions.register(dispatcher);
         });
     }
 
