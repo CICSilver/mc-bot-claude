@@ -1,0 +1,30 @@
+# A centered iron golem occupies parts of three columns and is 2.7 blocks tall.
+execute unless block ~ ~-1 ~ #golem_recall:floor run return 0
+execute unless block ~-1 ~ ~-1 #golem_recall:clearance run return 0
+execute unless block ~ ~ ~-1 #golem_recall:clearance run return 0
+execute unless block ~1 ~ ~-1 #golem_recall:clearance run return 0
+execute unless block ~-1 ~ ~ #golem_recall:clearance run return 0
+execute unless block ~ ~ ~ #golem_recall:clearance run return 0
+execute unless block ~1 ~ ~ #golem_recall:clearance run return 0
+execute unless block ~-1 ~ ~1 #golem_recall:clearance run return 0
+execute unless block ~ ~ ~1 #golem_recall:clearance run return 0
+execute unless block ~1 ~ ~1 #golem_recall:clearance run return 0
+execute unless block ~-1 ~1 ~-1 #golem_recall:clearance run return 0
+execute unless block ~ ~1 ~-1 #golem_recall:clearance run return 0
+execute unless block ~1 ~1 ~-1 #golem_recall:clearance run return 0
+execute unless block ~-1 ~1 ~ #golem_recall:clearance run return 0
+execute unless block ~ ~1 ~ #golem_recall:clearance run return 0
+execute unless block ~1 ~1 ~ #golem_recall:clearance run return 0
+execute unless block ~-1 ~1 ~1 #golem_recall:clearance run return 0
+execute unless block ~ ~1 ~1 #golem_recall:clearance run return 0
+execute unless block ~1 ~1 ~1 #golem_recall:clearance run return 0
+execute unless block ~-1 ~2 ~-1 #golem_recall:clearance run return 0
+execute unless block ~ ~2 ~-1 #golem_recall:clearance run return 0
+execute unless block ~1 ~2 ~-1 #golem_recall:clearance run return 0
+execute unless block ~-1 ~2 ~ #golem_recall:clearance run return 0
+execute unless block ~ ~2 ~ #golem_recall:clearance run return 0
+execute unless block ~1 ~2 ~ #golem_recall:clearance run return 0
+execute unless block ~-1 ~2 ~1 #golem_recall:clearance run return 0
+execute unless block ~ ~2 ~1 #golem_recall:clearance run return 0
+execute unless block ~1 ~2 ~1 #golem_recall:clearance run return 0
+return 1

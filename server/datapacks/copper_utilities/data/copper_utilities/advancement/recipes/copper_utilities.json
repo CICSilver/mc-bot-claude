@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_ingot": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_ingot"
+          }
+        ]
+      }
+    },
+    "has_copper_block": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_block"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_copper_ingot",
+      "has_copper_block"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "copper_utilities:rail_from_copper",
+      "copper_utilities:powered_rail_from_copper",
+      "copper_utilities:hopper_from_copper",
+      "copper_utilities:minecart_from_copper",
+      "copper_utilities:repair_chipped_anvil",
+      "copper_utilities:repair_damaged_anvil"
+    ]
+  }
+}

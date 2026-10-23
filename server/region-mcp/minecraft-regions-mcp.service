@@ -1,0 +1,24 @@
+[Unit]
+Description=Minecraft shared-region read-only MCP over HTTP
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/opt/minecraft-regions
+ExecStart=/opt/minecraft-regions/runtime/node /opt/minecraft-regions/scripts/region-mcp-http.mjs
+LoadCredential=region-token:/etc/minecraft-regions/token
+Environment=REGION_MCP_TOKEN_FILE=%d/region-token
+Environment=REGION_URL=http://127.0.0.1:25620
+Environment=REGION_SSH_HOST=
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=210
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

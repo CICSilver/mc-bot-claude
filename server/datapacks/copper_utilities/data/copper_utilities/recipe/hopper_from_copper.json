@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "C": "minecraft:copper_ingot",
+    "X": "minecraft:chest"
+  },
+  "pattern": [
+    "C C",
+    "CXC",
+    " C "
+  ],
+  "result": {
+    "id": "minecraft:hopper",
+    "count": 1
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "Recall the nearest player-built iron golem with /trigger golem",
+    "min_format": 101,
+    "max_format": 101
+  }
+}

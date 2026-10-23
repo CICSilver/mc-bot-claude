@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "Copper Utilities: copper recipes and anvil repair",
+    "min_format": [101, 1],
+    "max_format": [101, 1]
+  }
+}
