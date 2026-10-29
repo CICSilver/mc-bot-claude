@@ -188,6 +188,7 @@ if (layer !== "fast") {
 			XIAOKE_RELATIONSHIPS: join(HOME, "state", "relationships.json"),
 			XIAOKE_BELONGINGS: join(HOME, "state", "belongings.json"),
 			XIAOKE_REFERENCES: join(ROOT, REFERENCE_DIR),
+			XIAOKE_BUILDING_LIBRARY: join(ROOT, 'building-library'),
 			XIAOKE_REFERENCES_SHOWN: HOME !== resolve(ROOT) ? "参考" : REFERENCE_DIR,
 			XIAOKE_MOOD_CONFIG: join(ROOT, "prompts", "小克", "心情.json"),
 			XIAOKE_ANALYSIS: join(ROOT, "logs", "analysis.jsonl"),

@@ -10,6 +10,7 @@
   "world": "测试世界",
   "datapackTriggers": false,
   "env": {
+    "XIAOKE_ESTRUS": "off",
     "XIAOKE_HOME_ZONE": "-5,120,-12,5,150,5",
     "XIAOKE_ALIASES": "admin=CICSilver",
     "XIAOKE_COMPANIONS": "Moby,clawd"

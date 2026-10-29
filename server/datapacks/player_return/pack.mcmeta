@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "使用 /trigger respawn 返回复活点，再用 /trigger back 返回传送前的位置",
+    "min_format": 101,
+    "max_format": 101
+  }
+}

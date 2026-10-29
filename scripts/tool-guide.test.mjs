@@ -27,6 +27,8 @@ function captureTools(layer) {
         register(factory, getBot, {}, undefined, layer === 'mind' || layer === 'exec', {});
       } else if (name === 'registerSessionTools') {
         register(factory, getBot, {}, () => {}, async () => '');
+      } else if (name === 'registerBuildingLibraryTools') {
+        register(factory, getBot, undefined, undefined, join(ROOT, 'building-library'));
       } else {
         register(factory, getBot);
       }

@@ -41,7 +41,7 @@ const client = new AgyClient(findAgy(), profile.args, {
   conversationId: previousId,
 });
 
-let loop, socket, heartbeat, parentWatch, closing = false;
+let loop, socket, parentWatch, closing = false;
 const parentPid = Number(process.env.XIAOKE_LAYER_PARENT_PID);
 const parentAlive = () => {
   if (!parentPid) return true;
@@ -76,7 +76,6 @@ async function hook(event, tool = '') {
 async function shutdown(error) {
   if (closing) return;
   closing = true;
-  clearInterval(heartbeat);
   clearInterval(parentWatch);
   if (error) {
     console.error(`\n${layer} 停止：${error.message}`);
@@ -97,20 +96,29 @@ process.on('SIGTERM', () => void shutdown());
 try {
   log({ type: 'session', provider: 'agy', threadId: previousId ?? null, ...options });
   if (previousId) saveSession(previousId);
-  loop = new LayerLoop(client, previousId, options, log);
+  loop = new LayerLoop(client, previousId, {
+    ...options,
+    layer,
+    recoveryText: layer === 'exec'
+      ? '连接已经恢复。先 get-task 核对当前任务与已完成的进度，沿用原编号完成剩余步骤；身体已有后台活时等待其进展。'
+      : '连接已经恢复。结合最新事件与当前任务状态，接着处理剩余工作。',
+  }, log);
   loop.on('session', id => saveSession(id));
   loop.on('activity', (event, tool) => void hook(event, tool));
   loop.on('fatal', error => void shutdown(error));
+  loop.on('blocked', message => {
+    if (layer === 'mind') return;
+    void fetch(`http://127.0.0.1:${Number(process.env.EAR_PORT || config.earPort) || 25599}/event`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: '汇报', text: `${layer}：${message}` }),
+    }).catch(error => log({ type: 'hook_warning', event: 'blocked', message: error.message }));
+  });
   loop.on('output', text => process.stdout.write(text));
   loop.on('tool', info => {
     const argPreview = JSON.stringify(info.arguments ?? {});
     const shortArgs = argPreview.length > 90 ? argPreview.slice(0, 87) + '...' : argPreview;
     console.log(`  → [${info.server}.${info.tool}] ${shortArgs}`);
   });
-
-  heartbeat = setInterval(() => {
-    if (loop.active) void hook('PreToolUse', 'Read');
-  }, 15000);
 
   if (parentPid) {
     parentWatch = setInterval(() => {
