@@ -60,6 +60,7 @@ export function buildToolGuide(layer) {
       '  - `note-for-later`: `{"note": "记给调度脑的事项", "urgent": true}`',
       '  - `stop-work`: `{"action": "pause", "reason": "玩家原话与意图"}`；action 可选 pause、cancel、logout；玩家叫停或下线时先调用，再回应聊天。',
       '  - `change-affinity`: `{"player": "玩家名", "amount": 1, "reason": "原因"}`',
+      '  - 本轮所需的工具调用完成后，直接结束回答（不要再输出任何括号动作或文本，游戏内只显示 `send-chat` / `murmur` 发送的内容）。',
     ] : []),
     ...(layer === 'planner' ? [
       '- 规划脑常用工具参数：',

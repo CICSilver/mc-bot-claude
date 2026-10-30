@@ -61,6 +61,9 @@ test('makeProfile writes isolated .agents/mcp_config.json with serverUrl and age
   const agentContent = readFileSync(profile.agentFile, 'utf8');
   assert.match(agentContent, /name: xiaoke-fast/);
   assert.match(agentContent, /commandExecutionPolicy: off/);
+  assert.match(agentContent, /excludeDefaultComponents: true/);
+  assert.match(agentContent, /inheritCustomizations: false/);
+  assert.match(agentContent, /inheritMcp: true/);
   assert.match(agentContent, /# 测试提示词/);
 
   assert.ok(profile.args.includes('--conversation'));
