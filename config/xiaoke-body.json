@@ -17,7 +17,7 @@
   },
   "layers": {
     "fast": {
-      "model": "gemini-3.8-flash",
+      "model": "gemini-4-argon",
       "effort": "low"
     },
     "exec": {

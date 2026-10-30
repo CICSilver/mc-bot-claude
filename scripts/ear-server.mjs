@@ -207,7 +207,7 @@ async function withSnapshot(line, layer) {
 		if (recent.length) text += `　（刚才旁边的人在聊，不是对你说的：${recent.join(" ／ ")}）`;
 	}
 	try {
-		const res = await fetch(`${BODY_URL}/snapshot`, { signal: AbortSignal.timeout(800) });
+		const res = await fetch(`${BODY_URL}/snapshot?layer=${encodeURIComponent(layer)}`, { signal: AbortSignal.timeout(800) });
 		if (res.ok) {
 			const state = await res.text();
 			return specialEventCurrent(line, state) ? `${text}　${state}` : null;
@@ -319,7 +319,7 @@ every(async () => {
 	if (!clients[MIND].size || Date.now() < busyUntil) return;
 	if (await mindIdleMs() < idleWait) return;
 	idleWait = IDLE_MIN_MS + Math.random() * (IDLE_MAX_MS - IDLE_MIN_MS);
-	emit("空闲", `你有一会儿没动静了。接着过你自己的日子：推进手上的打算，或者看看周围冒个小点子；在等雨停、等天亮也找点小事做。${onlineText()}`);
+	emit("空闲", `你有一会儿没动静了。接着过你自己的日子：从〔现在〕的“待办”里挑一件新鲜事，或者看看周围自己冒个好玩的小点子（如搭个小装饰、立块有趣的牌子、去没去过的方向探险采花、写书或弹音符盒），立刻用 assign-task 让身体动起来（有值得惦记的新心愿也可以记进 goals.md）；别在屋里空站着发呆，也别重复看信箱/巡田。${onlineText()}`);
 }, 10 * 1000);
 
 // 同伴 bot 的聊天：没有真人在场就不转发；有真人时最多每 COMPANION_CHAT_MS 叫醒一次，中间攒下的几句合成一条
@@ -367,7 +367,7 @@ function handleLog(line) {
 		if (COMPANIONS.has(m[1])) { companionsOnline.delete(m[1]); emit("离开", `${m[1]}（AI 同伴）`); return; }
 		online.delete(m[1]);
 		if (!online.size) aloneSince ??= Date.now();
-		emit("离开", m[1]);
+		emit("离开", !online.size ? `${m[1]}（现在没有其他玩家在线了；若刚才因为陪 TA 而暂停了手头的活或停在原地，现在可以恢复自己的打算或冒个小点子继续玩啦）` : m[1], !online.size ? [FAST, MIND] : ROUTES.离开);
 	} else if (RE_ADV.test(msg)) {
 		emit("成就", msg);
 	} else if ((m = msg.match(RE_DEATH))) {

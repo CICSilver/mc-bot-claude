@@ -67,6 +67,9 @@ export class LayerLoop extends EventEmitter {
         this.active = turnId;
         this.queryCount = 0;
         this.queryStep = null;
+        this.lastInputText = text;
+        this.turnMcpTools = 0;
+        this.turnInvalidToolError = false;
         this.beginTurnSteps(this.threadId);
         this.log({ type: 'turn_started', turnId });
         this.emit('activity', 'UserPromptSubmit', '');
@@ -185,6 +188,7 @@ export class LayerLoop extends EventEmitter {
       }
       const isStart = step.state === 'ACTIVE';
       const isDone = step.state === 'DONE' || step.state === 'ERROR' || step.state === 'FAILED';
+      if (isDone && /unknown tool/i.test(String(info.error ?? step.error ?? ''))) this.turnInvalidToolError = true;
       if (!isStart && !isDone) return;
 
       this.emit('activity', isStart ? 'PreToolUse' : 'PostToolUse', info.hookTool);
@@ -199,6 +203,7 @@ export class LayerLoop extends EventEmitter {
         });
         if (isStart) {
           this.emit('tool', info);
+          this.turnMcpTools = (this.turnMcpTools ?? 0) + 1;
         }
         const key = `${step.conversation_id}:${index}`;
         if (isDone && this.active && this.options.layer === 'exec' && info.server === 'minecraft' && key !== this.queryStep) {
@@ -271,14 +276,37 @@ export class LayerLoop extends EventEmitter {
         this.log({ type: 'turn_blocked', turnId, reason: isSafety ? 'content_safety' : 'retry_limit' });
         this.emit('blocked', isSafety ? '本轮模型返回内容限制，当前任务需要调度处理。' : '本轮连接恢复已尝试两次，当前任务需要调度处理。');
         this.consecutiveFailures = 0;
+
         void this.pump();
       } else {
         this.recover(this.options.retryDelays?.[this.consecutiveFailures - 1] ?? this.consecutiveFailures * 1000);
       }
     } else {
       this.consecutiveFailures = 0;
+      if (this.options.layer === 'exec' && /\[(任务|进展|天气)\]/.test(this.lastInputText ?? '')) {
+        if ((this.turnMcpTools ?? 0) === 0 || this.turnInvalidToolError) {
+          this.noToolTaskTurns = (this.noToolTaskTurns ?? 0) + 1;
+          if (this.turnInvalidToolError || this.noToolTaskTurns >= 2) {
+            this.noToolTaskTurns = 0;
+            this.resetSession(this.turnInvalidToolError ? 'invalid_tool_call' : 'exec_no_tool_calls');
+            return;
+          }
+        } else {
+          this.noToolTaskTurns = 0;
+        }
+      }
       void this.pump();
     }
+  }
+
+  resetSession(reason) {
+    this.threadId = null;
+    this.lastLoggedConversationId = null;
+    this.log({ type: 'session_reset', reason });
+    this.interrupting = this.client.interrupt(true).finally(() => {
+      this.interrupting = null;
+      if (!this.stopped) void this.pump();
+    });
   }
 
   recover(waitMs) {
